@@ -11,8 +11,11 @@
  */
 function getPcfConnection() {
     try {
-        // PCF uses SQLite database
-        $pcfDbPath = '/Users/ammarfahad/Downloads/Others/CTI Proj/pcf/configuration/database.sqlite3';
+        // Include remote config to use configured settings
+        require_once __DIR__ . '/../config/pcf_remote_config.php';
+        
+        // Use configured path from pcf_remote_config.php
+        $pcfDbPath = PCF_SQLITE_PATH;
         
         if (!file_exists($pcfDbPath)) {
             error_log("PCF database file not found: " . $pcfDbPath);

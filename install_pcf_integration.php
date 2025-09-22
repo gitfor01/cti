@@ -17,6 +17,7 @@ if (php_sapi_name() !== 'cli' && !isset($_GET['web_install'])) {
 
 require_once 'config/database.php';
 require_once 'includes/pcf_functions.php';
+require_once 'includes/pcf_remote_functions.php';
 
 echo "<h1>PCF Integration Installation</h1>\n";
 echo "<style>
@@ -45,7 +46,7 @@ try {
 }
 
 // Check PCF database
-$pcfPdo = getPcfConnection();
+$pcfPdo = getPcfRemoteConnection();
 if ($pcfPdo) {
     echo "<p class='success'>✓ PCF database connection successful</p>\n";
     
@@ -98,7 +99,7 @@ echo "<h2>Step 3: Initial Data Sync</h2>\n";
 if (empty($errors)) {
     try {
         echo "<p class='info'>Starting initial sync from PCF...</p>\n";
-        $syncResult = syncPcfFindings($pdo);
+        $syncResult = syncRemotePcfFindings($pdo);
         
         if ($syncResult['success']) {
             echo "<p class='success'>✓ Initial sync completed successfully</p>\n";

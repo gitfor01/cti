@@ -8,6 +8,7 @@
 
 require_once 'config/database.php';
 require_once 'includes/pcf_functions.php';
+require_once 'includes/pcf_remote_functions.php';
 
 echo "<h1>PCF Integration Setup</h1>\n";
 
@@ -19,7 +20,7 @@ try {
     
     // Test PCF connection
     echo "<p>Testing PCF database connection...</p>\n";
-    $pcfPdo = getPcfConnection();
+    $pcfPdo = getPcfRemoteConnection();
     if ($pcfPdo) {
         echo "<p style='color: green;'>✓ PCF database connection successful</p>\n";
         
@@ -39,7 +40,7 @@ try {
     
     // Perform initial sync
     echo "<p>Performing initial sync...</p>\n";
-    $syncResult = syncPcfFindings($pdo);
+    $syncResult = syncRemotePcfFindings($pdo);
     
     if ($syncResult['success']) {
         echo "<p style='color: green;'>✓ Initial sync completed successfully</p>\n";

@@ -480,4 +480,175 @@ include 'includes/header.php';
     </div>
 </div>
 
+<!-- PCF Integration Management Section -->
+<div class="row mt-4" id="pcf-integration">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-database"></i> PCF Integration Management</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    <i class="fas fa-info-circle"></i> 
+                    Manage your PenTest Collaboration Framework (PCF) database integration. 
+                    Configure connection settings and set up PCF tables for finding synchronization.
+                </p>
+
+                <!-- PCF Configuration Status -->
+                <div class="row mb-4">
+                    <div class="col-md-12">
+                        <div class="card border-left-primary">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="fas fa-cog"></i> Current PCF Configuration
+                                </h6>
+                                <?php
+                                // Check PCF configuration status
+                                $pcfConfigFile = __DIR__ . '/config/pcf_remote_config.php';
+                                $pcfConfigured = false;
+                                $pcfPath = '';
+                                $pcfType = '';
+                                
+                                if (file_exists($pcfConfigFile)) {
+                                    include_once $pcfConfigFile;
+                                    if (defined('PCF_CONNECTION_TYPE') && defined('PCF_DATABASE_PATH')) {
+                                        $pcfConfigured = true;
+                                        $pcfPath = PCF_DATABASE_PATH;
+                                        $pcfType = PCF_CONNECTION_TYPE;
+                                    }
+                                }
+                                ?>
+                                
+                                <?php if ($pcfConfigured): ?>
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle"></i> 
+                                        <strong>PCF Configured</strong><br>
+                                        <small>
+                                            <strong>Type:</strong> <?php echo htmlspecialchars($pcfType); ?><br>
+                                            <strong>Path:</strong> <?php echo htmlspecialchars($pcfPath); ?>
+                                        </small>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="alert alert-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> 
+                                        <strong>PCF Not Configured</strong><br>
+                                        <small>Please configure your PCF database connection first.</small>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PCF Management Actions -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-primary">
+                            <div class="card-body text-center">
+                                <i class="fas fa-cog fa-3x text-primary mb-3"></i>
+                                <h6 class="card-title">Configure PCF Connection</h6>
+                                <p class="card-text small text-muted">
+                                    Set up or update your PCF database connection settings and file paths.
+                                </p>
+                                <a href="update_pcf_config.php" class="btn btn-primary btn-sm" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> Configure PCF
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-success">
+                            <div class="card-body text-center">
+                                <i class="fas fa-table fa-3x text-success mb-3"></i>
+                                <h6 class="card-title">Setup PCF Tables</h6>
+                                <p class="card-text small text-muted">
+                                    Create the necessary PCF tables in your CTI database for finding synchronization.
+                                </p>
+                                <a href="setup_pcf_integration.php" class="btn btn-success btn-sm" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> Setup Tables
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100 border-info">
+                            <div class="card-body text-center">
+                                <i class="fas fa-download fa-3x text-info mb-3"></i>
+                                <h6 class="card-title">Full PCF Installation</h6>
+                                <p class="card-text small text-muted">
+                                    Complete PCF integration setup including table creation and initial data sync.
+                                </p>
+                                <a href="install_pcf_integration.php" class="btn btn-info btn-sm" target="_blank">
+                                    <i class="fas fa-external-link-alt"></i> Full Install
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PCF Integration Guide -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="card border-secondary">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-book"></i> PCF Integration Setup Guide
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <h6 class="text-primary">
+                                            <i class="fas fa-list-ol"></i> Setup Steps:
+                                        </h6>
+                                        <ol class="small">
+                                            <li><strong>Configure Connection:</strong> Use "Configure PCF" to set your PCF database path and connection type.</li>
+                                            <li><strong>Setup Tables:</strong> Use "Setup Tables" for basic table creation, or "Full Install" for complete setup.</li>
+                                            <li><strong>Verify Setup:</strong> Check that the configuration status shows "PCF Configured" above.</li>
+                                        </ol>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <h6 class="text-info">
+                                            <i class="fas fa-lightbulb"></i> Tips:
+                                        </h6>
+                                        <ul class="small">
+                                            <li>All setup scripts open in new tabs for easy monitoring</li>
+                                            <li>Use "Full Install" for first-time setup</li>
+                                            <li>Use "Setup Tables" if you only need to recreate tables</li>
+                                            <li>Configuration changes take effect immediately</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 p-3 bg-light rounded">
+                                    <h6 class="text-secondary mb-2">
+                                        <i class="fas fa-database"></i> Supported PCF Connection Types:
+                                    </h6>
+                                    <div class="row small">
+                                        <div class="col-md-6">
+                                            <ul class="mb-0">
+                                                <li><strong>local_sqlite:</strong> Local SQLite database file</li>
+                                                <li><strong>remote_sqlite:</strong> Remote SQLite database file</li>
+                                                <li><strong>mysql:</strong> MySQL database connection</li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="mb-0">
+                                                <li><strong>postgresql:</strong> PostgreSQL database connection</li>
+                                                <li><strong>rest_api:</strong> REST API endpoint</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php include 'includes/footer.php'; ?>

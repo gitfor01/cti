@@ -7,6 +7,170 @@
  */
 
 require_once __DIR__ . '/../config/pcf_remote_config.php';
+require_once __DIR__ . '/pcf_functions.php';
+
+// Define default constants if not already defined
+if (!defined('PCF_QUERY_TIMEOUT')) {
+    define('PCF_QUERY_TIMEOUT', 30);
+}
+
+if (!defined('PCF_CONNECTION_TIMEOUT')) {
+    define('PCF_CONNECTION_TIMEOUT', 10);
+}
+
+if (!defined('PCF_REMOTE_SQLITE_LOCAL_CACHE')) {
+    define('PCF_REMOTE_SQLITE_LOCAL_CACHE', sys_get_temp_dir() . '/pcf_remote_cache.sqlite3');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_CACHE_DURATION')) {
+    define('PCF_REMOTE_SQLITE_CACHE_DURATION', 3600); // 1 hour in seconds
+}
+
+if (!defined('PCF_REMOTE_SQLITE_METHOD')) {
+    define('PCF_REMOTE_SQLITE_METHOD', 'ssh');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_HOST')) {
+    define('PCF_REMOTE_SQLITE_HOST', 'localhost');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_PATH')) {
+    define('PCF_REMOTE_SQLITE_PATH', '/path/to/remote/database.sqlite3');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_USERNAME')) {
+    define('PCF_REMOTE_SQLITE_USERNAME', '');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_PASSWORD')) {
+    define('PCF_REMOTE_SQLITE_PASSWORD', '');
+}
+
+if (!defined('PCF_REMOTE_SQLITE_PORT')) {
+    define('PCF_REMOTE_SQLITE_PORT', 22);
+}
+
+if (!defined('PCF_USE_SSL')) {
+    define('PCF_USE_SSL', false);
+}
+
+if (!defined('PCF_VERIFY_SSL')) {
+    define('PCF_VERIFY_SSL', true);
+}
+
+if (!defined('PCF_SSL_CERT_PATH')) {
+    define('PCF_SSL_CERT_PATH', '');
+}
+
+if (!defined('PCF_API_BASE_URL')) {
+    define('PCF_API_BASE_URL', '');
+}
+
+if (!defined('PCF_API_TOKEN')) {
+    define('PCF_API_TOKEN', '');
+}
+
+if (!defined('PCF_API_USERNAME')) {
+    define('PCF_API_USERNAME', '');
+}
+
+if (!defined('PCF_API_PASSWORD')) {
+    define('PCF_API_PASSWORD', '');
+}
+
+// MySQL connection constants
+if (!defined('PCF_MYSQL_HOST')) {
+    define('PCF_MYSQL_HOST', 'localhost');
+}
+
+if (!defined('PCF_MYSQL_PORT')) {
+    define('PCF_MYSQL_PORT', 3306);
+}
+
+if (!defined('PCF_MYSQL_DATABASE')) {
+    define('PCF_MYSQL_DATABASE', 'pcf_database');
+}
+
+if (!defined('PCF_MYSQL_USERNAME')) {
+    define('PCF_MYSQL_USERNAME', '');
+}
+
+if (!defined('PCF_MYSQL_PASSWORD')) {
+    define('PCF_MYSQL_PASSWORD', '');
+}
+
+// PostgreSQL connection constants
+if (!defined('PCF_POSTGRESQL_HOST')) {
+    define('PCF_POSTGRESQL_HOST', 'localhost');
+}
+
+if (!defined('PCF_POSTGRESQL_PORT')) {
+    define('PCF_POSTGRESQL_PORT', 5432);
+}
+
+if (!defined('PCF_POSTGRESQL_DATABASE')) {
+    define('PCF_POSTGRESQL_DATABASE', 'pcf_database');
+}
+
+if (!defined('PCF_POSTGRESQL_USERNAME')) {
+    define('PCF_POSTGRESQL_USERNAME', '');
+}
+
+if (!defined('PCF_POSTGRESQL_PASSWORD')) {
+    define('PCF_POSTGRESQL_PASSWORD', '');
+}
+
+// Additional configuration constants
+if (!defined('PCF_CACHE_ENABLED')) {
+    define('PCF_CACHE_ENABLED', true);
+}
+
+if (!defined('PCF_CACHE_DURATION')) {
+    define('PCF_CACHE_DURATION', 3600); // 1 hour
+}
+
+if (!defined('PCF_SYNC_BATCH_SIZE')) {
+    define('PCF_SYNC_BATCH_SIZE', 100);
+}
+
+if (!defined('PCF_SYNC_MAX_RETRIES')) {
+    define('PCF_SYNC_MAX_RETRIES', 3);
+}
+
+// Define default table and field mappings if not already set
+if (!isset($GLOBALS['PCF_TABLE_MAPPING'])) {
+    $GLOBALS['PCF_TABLE_MAPPING'] = [
+        'issues' => 'Issues',
+        'projects' => 'Projects'
+    ];
+}
+
+if (!isset($GLOBALS['PCF_FIELD_MAPPING'])) {
+    $GLOBALS['PCF_FIELD_MAPPING'] = [
+        // Issue fields
+        'issue_id' => 'id',
+        'issue_name' => 'name',
+        'issue_description' => 'description',
+        'issue_cvss' => 'cvss',
+        'issue_cwe' => 'cwe',
+        'issue_cve' => 'cve',
+        'issue_status' => 'status',
+        'issue_type' => 'type',
+        'issue_fix' => 'fix',
+        'issue_technical' => 'technical',
+        'issue_risks' => 'risks',
+        'issue_references' => '[references]',
+        'issue_url_path' => 'url_path',
+        'issue_param' => 'param',
+        'project_id' => 'project_id',
+        
+        // Project fields
+        'project_name' => 'name',
+        'project_description' => 'description',
+        'project_start_date' => 'start_date',
+        'project_end_date' => 'end_date'
+    ];
+}
 
 /**
  * Get PCF database connection based on configuration
@@ -471,7 +635,7 @@ function syncPcfFindingsFromDatabase($ctiPdo) {
                 i.{$fieldMapping['issue_fix']} as fix,
                 i.{$fieldMapping['issue_technical']} as technical,
                 i.{$fieldMapping['issue_risks']} as risks,
-                i.{$fieldMapping['issue_references']} as references,
+                i.{$fieldMapping['issue_references']} as issue_references,
                 i.{$fieldMapping['issue_url_path']} as url_path,
                 i.{$fieldMapping['issue_param']} as param,
                 i.{$fieldMapping['project_id']} as project_id,
@@ -602,7 +766,7 @@ function processPcfFindings($ctiPdo, $pcfIssues) {
                         ':param' => $issue['param'] ?? '',
                         ':technical' => $issue['technical'] ?? '',
                         ':risks' => $issue['risks'] ?? '',
-                        ':references' => $issue['references'] ?? '',
+                        ':references' => $issue['issue_references'] ?? '',
                         ':start_date' => !empty($issue['start_date']) ? date('Y-m-d H:i:s', is_numeric($issue['start_date']) ? $issue['start_date'] : strtotime($issue['start_date'])) : null,
                         ':end_date' => !empty($issue['end_date']) ? date('Y-m-d H:i:s', is_numeric($issue['end_date']) ? $issue['end_date'] : strtotime($issue['end_date'])) : null,
                         ':created_at' => $createdAt
