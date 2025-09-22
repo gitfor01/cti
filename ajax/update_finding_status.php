@@ -1,6 +1,6 @@
 <?php
 /**
- * AJAX endpoint to update finding status to 'Sent To Risk'
+ * AJAX endpoint to update finding status to 'Risk Raised'
  */
 
 header('Content-Type: application/json');
@@ -28,8 +28,8 @@ try {
     }
     
     // Get the status to update to
-    $status = $input['status'] ?? 'Sent To Risk';
-    $allowedStatuses = ['Sent To Risk', 'Closed'];
+    $status = $input['status'] ?? 'Risk Raised';
+    $allowedStatuses = ['Risk Raised', 'Closed'];
     
     if (!in_array($status, $allowedStatuses)) {
         throw new Exception('Invalid status. Allowed: ' . implode(', ', $allowedStatuses));

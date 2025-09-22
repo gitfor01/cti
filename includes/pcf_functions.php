@@ -203,7 +203,7 @@ function createPcfFindingsTable($pdo) {
  * @param string $sortOrder Sort order (asc or desc)
  * @return array Array of PCF findings
  */
-function getPcfFindings($pdo, $limit = 50, $offset = 0, $projectFilter = '', $severityFilter = '', $statusFilter = '', $monthFilter = '', $sortBy = 'cvss', $sortOrder = 'desc') {
+function getPcfFindings($pdo, $limit = 50, $offset = 0, $projectFilter = '', $severityFilter = '', $statusFilter = '', $monthFilter = '', $sortBy = 'cvss', $sortOrder = 'desc', $yearFilter = '') {
     $sql = "SELECT * FROM pcf_findings WHERE 1=1";
     $params = [];
     
@@ -242,6 +242,11 @@ function getPcfFindings($pdo, $limit = 50, $offset = 0, $projectFilter = '', $se
         $params[':month'] = $monthFilter;
     }
     
+    if (!empty($yearFilter)) {
+        $sql .= " AND YEAR(created_at) = :year";
+        $params[':year'] = $yearFilter;
+    }
+    
     // Validate and sanitize sort parameters
     $allowedSortColumns = ['name', 'project_name', 'cvss', 'status', 'created_at'];
     $sortBy = in_array($sortBy, $allowedSortColumns) ? $sortBy : 'cvss';
@@ -271,7 +276,7 @@ function getPcfFindings($pdo, $limit = 50, $offset = 0, $projectFilter = '', $se
  * @param string $monthFilter Month filter (YYYY-MM format)
  * @return int Total count
  */
-function getPcfFindingsCount($pdo, $projectFilter = '', $severityFilter = '', $statusFilter = '', $monthFilter = '') {
+function getPcfFindingsCount($pdo, $projectFilter = '', $severityFilter = '', $statusFilter = '', $monthFilter = '', $yearFilter = '') {
     $sql = "SELECT COUNT(*) FROM pcf_findings WHERE 1=1";
     $params = [];
     
@@ -310,6 +315,11 @@ function getPcfFindingsCount($pdo, $projectFilter = '', $severityFilter = '', $s
         $params[':month'] = $monthFilter;
     }
     
+    if (!empty($yearFilter)) {
+        $sql .= " AND YEAR(created_at) = :year";
+        $params[':year'] = $yearFilter;
+    }
+    
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     
@@ -337,10 +347,12 @@ function getPcfProjects($pdo) {
  * Get count of findings by severity level
  * @param PDO $pdo CTI database connection
  * @param string $severity Severity level (critical, high, medium, low, info)
+ * @param string $yearFilter Year filter (optional)
  * @return int Count of findings
  */
-function getPcfFindingsCountBySeverity($pdo, $severity) {
+function getPcfFindingsCountBySeverity($pdo, $severity, $yearFilter = '') {
     $sql = "SELECT COUNT(*) FROM pcf_findings WHERE ";
+    $params = [];
     
     switch ($severity) {
         case 'critical':
@@ -362,8 +374,13 @@ function getPcfFindingsCountBySeverity($pdo, $severity) {
             return 0;
     }
     
+    if (!empty($yearFilter)) {
+        $sql .= " AND YEAR(created_at) = :year";
+        $params[':year'] = $yearFilter;
+    }
+    
     $stmt = $pdo->prepare($sql);
-    $stmt->execute();
+    $stmt->execute($params);
     
     return $stmt->fetchColumn();
 }
@@ -463,7 +480,7 @@ function autoSyncPcfFindings($pdo) {
 }
 
 /**
- * Get high/critical findings that are old and not sent to risk
+ * Get high/critical findings that are old and risk not raised
  * @param PDO $pdo CTI database connection
  * @return array Array of warning findings
  */
@@ -472,7 +489,8 @@ function getWarningFindings($pdo) {
         // Get findings that are:
         // 1. High or Critical severity (CVSS >= 7.0)
         // 2. Created more than 1 month ago (now based on project end date)
-        // 3. Status is not 'Fixed', 'Closed', or contains 'Sent To Risk'
+        // 3. Status is not 'Fixed', 'Closed', or contains 'Risk Raised'
+        // 4. From current year only
         $stmt = $pdo->prepare("
             SELECT 
                 id, name, project_name, cvss, status, created_at, end_date,
@@ -481,9 +499,10 @@ function getWarningFindings($pdo) {
             FROM pcf_findings 
             WHERE cvss >= 7.0 
             AND created_at <= DATE_SUB(NOW(), INTERVAL 1 MONTH)
+            AND YEAR(created_at) = YEAR(NOW())
             AND status NOT IN ('Fixed', 'Closed')
-            AND status NOT LIKE '%Sent To Risk%'
-            AND status NOT LIKE '%sent to risk%'
+            AND status NOT LIKE '%Risk Raised%'
+            AND status NOT LIKE '%risk raised%'
             ORDER BY cvss DESC, created_at ASC
         ");
         $stmt->execute();
@@ -507,9 +526,10 @@ function getWarningFindingsCount($pdo) {
             FROM pcf_findings 
             WHERE cvss >= 7.0 
             AND created_at <= DATE_SUB(NOW(), INTERVAL 1 MONTH)
+            AND YEAR(created_at) = YEAR(NOW())
             AND status NOT IN ('Fixed', 'Closed')
-            AND status NOT LIKE '%Sent To Risk%'
-            AND status NOT LIKE '%sent to risk%'
+            AND status NOT LIKE '%Risk Raised%'
+            AND status NOT LIKE '%risk raised%'
         ");
         $stmt->execute();
         
@@ -524,13 +544,13 @@ function getWarningFindingsCount($pdo) {
  * Update finding status in both CTI and PCF databases
  * @param PDO $ctiPdo CTI database connection
  * @param int $findingId CTI finding ID
- * @param string $newStatus New status ('Sent To Risk' or 'Closed')
+ * @param string $newStatus New status ('Risk Raised' or 'Closed')
  * @return array Result array with success status and message
  */
 function updateFindingStatus($ctiPdo, $findingId, $newStatus) {
     try {
         // Validate status
-        $allowedStatuses = ['Sent To Risk', 'Closed'];
+        $allowedStatuses = ['Risk Raised', 'Closed'];
         if (!in_array($newStatus, $allowedStatuses)) {
             return ['success' => false, 'error' => 'Invalid status. Allowed: ' . implode(', ', $allowedStatuses)];
         }
@@ -573,13 +593,13 @@ function updateFindingStatus($ctiPdo, $findingId, $newStatus) {
 }
 
 /**
- * Update finding status to 'Sent To Risk' in both CTI and PCF databases
+ * Update finding status to 'Risk Raised' in both CTI and PCF databases
  * @param PDO $ctiPdo CTI database connection
  * @param int $findingId CTI finding ID
  * @return array Result array with success status and message
  */
-function markFindingAsSentToRisk($ctiPdo, $findingId) {
-    return updateFindingStatus($ctiPdo, $findingId, 'Sent To Risk');
+function markFindingAsRiskRaised($ctiPdo, $findingId) {
+    return updateFindingStatus($ctiPdo, $findingId, 'Risk Raised');
 }
 
 /**
@@ -596,7 +616,7 @@ function markFindingAsClosed($ctiPdo, $findingId) {
  * Bulk update multiple findings status
  * @param PDO $ctiPdo CTI database connection
  * @param array $findingIds Array of CTI finding IDs
- * @param string $newStatus New status ('Sent To Risk' or 'Closed')
+ * @param string $newStatus New status ('Risk Raised' or 'Closed')
  * @return array Result array with success status and details
  */
 function updateMultipleFindingsStatus($ctiPdo, $findingIds, $newStatus) {
@@ -625,13 +645,13 @@ function updateMultipleFindingsStatus($ctiPdo, $findingIds, $newStatus) {
 }
 
 /**
- * Bulk update multiple findings status to 'Sent To Risk'
+ * Bulk update multiple findings status to 'Risk Raised'
  * @param PDO $ctiPdo CTI database connection
  * @param array $findingIds Array of CTI finding IDs
  * @return array Result array with success status and details
  */
-function markMultipleFindingsAsSentToRisk($ctiPdo, $findingIds) {
-    return updateMultipleFindingsStatus($ctiPdo, $findingIds, 'Sent To Risk');
+function markMultipleFindingsAsRiskRaised($ctiPdo, $findingIds) {
+    return updateMultipleFindingsStatus($ctiPdo, $findingIds, 'Risk Raised');
 }
 
 /**

@@ -23,13 +23,14 @@ $projectFilter = isset($_GET['project']) ? $_GET['project'] : '';
 $severityFilter = isset($_GET['severity']) ? $_GET['severity'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $monthFilter = isset($_GET['month']) ? $_GET['month'] : '';
+$yearFilter = isset($_GET['year']) ? $_GET['year'] : date('Y'); // Default to current year
 
 // Get sorting parameters
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'cvss';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'desc';
 
-$pcfFindings = getPcfFindings($pdo, $limit, $offset, $projectFilter, $severityFilter, $statusFilter, $monthFilter, $sortBy, $sortOrder);
-$totalFindings = getPcfFindingsCount($pdo, $projectFilter, $severityFilter, $statusFilter, $monthFilter);
+$pcfFindings = getPcfFindings($pdo, $limit, $offset, $projectFilter, $severityFilter, $statusFilter, $monthFilter, $sortBy, $sortOrder, $yearFilter);
+$totalFindings = getPcfFindingsCount($pdo, $projectFilter, $severityFilter, $statusFilter, $monthFilter, $yearFilter);
 $totalPages = ceil($totalFindings / $limit);
 
 // Get unique projects for filter dropdown
@@ -238,7 +239,7 @@ html {
                     </h5>
                     <p class="mb-2">
                         <strong><?php echo $warningCount; ?></strong> high or critical severity finding<?php echo $warningCount > 1 ? 's' : ''; ?> 
-                        from completed projects or older than 1 month <?php echo $warningCount > 1 ? 'have' : 'has'; ?> not been sent to risk management.
+                        from completed projects or older than 1 month <?php echo $warningCount > 1 ? 'have' : 'has'; ?> not had risk raised.
                     </p>
                     <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="collapse" data-bs-target="#warningDetails" aria-expanded="false" aria-controls="warningDetails">
                         <i class="fas fa-list"></i> View Details (<?php echo $warningCount; ?> finding<?php echo $warningCount > 1 ? 's' : ''; ?>)
@@ -257,7 +258,7 @@ html {
                         <div>
                             <div class="btn-group" role="group">
                                 <button type="button" class="btn btn-sm btn-success" id="markSelectedAsRisk" disabled>
-                                    <i class="fas fa-share"></i> Mark Selected as Sent To Risk
+                                    <i class="fas fa-share"></i> Mark Selected as Risk Raised
                                 </button>
                                 <button type="button" class="btn btn-sm btn-secondary" id="markSelectedAsClosed" disabled>
                                     <i class="fas fa-times-circle"></i> Mark Selected as Closed
@@ -265,7 +266,7 @@ html {
                             </div>
                             <div class="btn-group ms-2" role="group">
                                 <button type="button" class="btn btn-sm btn-outline-success" id="markAllAsRisk">
-                                    <i class="fas fa-share-square"></i> Mark All as Sent To Risk
+                                    <i class="fas fa-share-square"></i> Mark All as Risk Raised
                                 </button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary" id="markAllAsClosed">
                                     <i class="fas fa-times-circle"></i> Mark All as Closed
@@ -334,7 +335,7 @@ html {
                                             <div class="btn-group" role="group">
                                                 <button type="button" class="btn btn-sm btn-outline-success mark-single-risk" 
                                                         data-finding-id="<?php echo $finding['id']; ?>"
-                                                        title="Mark as Sent To Risk">
+                                                        title="Mark as Risk Raised">
                                                     <i class="fas fa-share"></i>
                                                 </button>
                                                 <button type="button" class="btn btn-sm btn-outline-secondary mark-single-closed" 
@@ -356,6 +357,55 @@ html {
 </div>
 <?php endif; ?>
 
+<!-- Year Navigation -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="d-flex justify-content-center align-items-center">
+            <div class="d-flex align-items-center">
+                <!-- Previous Year Arrow -->
+                <?php 
+                $prevYear = $yearFilter - 1;
+                $currentFilters = http_build_query(array_filter([
+                    'project' => $projectFilter,
+                    'severity' => $severityFilter,
+                    'status' => $statusFilter,
+                    'month' => $monthFilter,
+                    'sort' => $sortBy,
+                    'order' => $sortOrder,
+                    'year' => $prevYear
+                ]));
+                ?>
+                <a href="?<?php echo $currentFilters; ?>" class="btn btn-outline-secondary btn-sm me-3" title="Previous Year (<?php echo $prevYear; ?>)">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                
+                <!-- Current Year Display -->
+                <h5 class="mb-0 mx-3">
+                    <i class="fas fa-calendar-alt text-primary"></i> 
+                    <span class="badge bg-primary"><?php echo $yearFilter; ?></span>
+                </h5>
+                
+                <!-- Next Year Arrow -->
+                <?php 
+                $nextYear = $yearFilter + 1;
+                $nextFilters = http_build_query(array_filter([
+                    'project' => $projectFilter,
+                    'severity' => $severityFilter,
+                    'status' => $statusFilter,
+                    'month' => $monthFilter,
+                    'sort' => $sortBy,
+                    'order' => $sortOrder,
+                    'year' => $nextYear
+                ]));
+                ?>
+                <a href="?<?php echo $nextFilters; ?>" class="btn btn-outline-secondary btn-sm ms-3" title="Next Year (<?php echo $nextYear; ?>)">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Filters -->
 <div class="filter-section">
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -372,6 +422,8 @@ html {
     <div class="collapse" id="filterCollapse">
         <div class="card card-body">
             <form method="get" class="row g-3" action="#findings-table">
+                <!-- Hidden input to preserve year filter -->
+                <input type="hidden" name="year" value="<?php echo htmlspecialchars($yearFilter); ?>">
         <div class="col-md-3">
             <label for="project" class="form-label">Project</label>
             <select name="project" id="project" class="form-select">
@@ -495,7 +547,8 @@ html {
                                 'project' => $projectFilter,
                                 'severity' => $severityFilter,
                                 'status' => $statusFilter,
-                                'month' => $monthFilter
+                                'month' => $monthFilter,
+                                'year' => $yearFilter
                             ];
                             ?>
                             <?php echo getSortableHeader('name', 'Finding', $sortBy, $sortOrder, $filters); ?>
@@ -550,6 +603,15 @@ html {
             <!-- Pagination -->
             <?php if ($totalPages > 1): ?>
                 <?php
+                // Define filters array for pagination
+                $filters = [
+                    'project' => $projectFilter,
+                    'severity' => $severityFilter,
+                    'status' => $statusFilter,
+                    'month' => $monthFilter,
+                    'year' => $yearFilter
+                ];
+                
                 // Helper function to build pagination URL with all parameters
                 function buildPaginationUrl($pageNum, $filters, $sortBy, $sortOrder) {
                     $url = '?page=' . $pageNum;
@@ -597,7 +659,7 @@ html {
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
             <div class="stat-content">
-                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'critical'); ?></div>
+                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'critical', $yearFilter); ?></div>
                 <div class="stat-label">Critical</div>
             </div>
         </div>
@@ -608,7 +670,7 @@ html {
                 <i class="fas fa-exclamation-circle"></i>
             </div>
             <div class="stat-content">
-                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'high'); ?></div>
+                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'high', $yearFilter); ?></div>
                 <div class="stat-label">High</div>
             </div>
         </div>
@@ -619,7 +681,7 @@ html {
                 <i class="fas fa-minus-circle"></i>
             </div>
             <div class="stat-content">
-                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'medium'); ?></div>
+                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'medium', $yearFilter); ?></div>
                 <div class="stat-label">Medium</div>
             </div>
         </div>
@@ -630,7 +692,7 @@ html {
                 <i class="fas fa-info-circle"></i>
             </div>
             <div class="stat-content">
-                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'low'); ?></div>
+                <div class="stat-number"><?php echo getPcfFindingsCountBySeverity($pdo, 'low', $yearFilter); ?></div>
                 <div class="stat-label">Low</div>
             </div>
         </div>
@@ -717,7 +779,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Mark selected findings as sent to risk
+    // Mark selected findings as risk raised
     if (markSelectedAsRiskBtn) {
         markSelectedAsRiskBtn.addEventListener('click', function() {
             const checkedBoxes = document.querySelectorAll('.warning-checkbox:checked');
@@ -728,8 +790,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            if (confirm(`Are you sure you want to mark ${findingIds.length} finding(s) as "Sent To Risk"?`)) {
-                updateFindingsStatus(findingIds, 'Sent To Risk');
+            if (confirm(`Are you sure you want to mark ${findingIds.length} finding(s) as "Risk Raised"?`)) {
+                updateFindingsStatus(findingIds, 'Risk Raised');
             }
         });
     }
@@ -751,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Mark all findings as sent to risk
+    // Mark all findings as risk raised
     if (markAllAsRiskBtn) {
         markAllAsRiskBtn.addEventListener('click', function() {
             const allFindingIds = Array.from(warningCheckboxes).map(cb => parseInt(cb.value));
@@ -761,8 +823,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
-            if (confirm(`Are you sure you want to mark ALL ${allFindingIds.length} finding(s) as "Sent To Risk"?`)) {
-                updateFindingsStatus(allFindingIds, 'Sent To Risk');
+            if (confirm(`Are you sure you want to mark ALL ${allFindingIds.length} finding(s) as "Risk Raised"?`)) {
+                updateFindingsStatus(allFindingIds, 'Risk Raised');
             }
         });
     }
@@ -783,14 +845,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Individual finding mark as sent to risk
+    // Individual finding mark as risk raised
     document.querySelectorAll('.mark-single-risk').forEach(button => {
         button.addEventListener('click', function() {
             const findingId = parseInt(this.getAttribute('data-finding-id'));
             const findingName = this.closest('tr').querySelector('strong').textContent;
             
-            if (confirm(`Are you sure you want to mark "${findingName}" as "Sent To Risk"?`)) {
-                updateFindingsStatus([findingId], 'Sent To Risk');
+            if (confirm(`Are you sure you want to mark "${findingName}" as "Risk Raised"?`)) {
+                updateFindingsStatus([findingId], 'Risk Raised');
             }
         });
     });
@@ -808,7 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Function to update findings status via AJAX
-    function updateFindingsStatus(findingIds, status = 'Sent To Risk') {
+    function updateFindingsStatus(findingIds, status = 'Risk Raised') {
         // Show loading state
         const buttons = document.querySelectorAll('#markSelectedAsRisk, #markSelectedAsClosed, #markAllAsRisk, #markAllAsClosed, .mark-single-risk, .mark-single-closed');
         buttons.forEach(btn => {
@@ -859,7 +921,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const markAllAsClosedBtn = document.getElementById('markAllAsClosed');
         
         if (markSelectedAsRiskBtn) {
-            markSelectedAsRiskBtn.innerHTML = '<i class="fas fa-share"></i> Mark Selected as Sent To Risk';
+            markSelectedAsRiskBtn.innerHTML = '<i class="fas fa-share"></i> Mark Selected as Risk Raised';
         }
         if (markSelectedAsClosedBtn) {
             markSelectedAsClosedBtn.innerHTML = '<i class="fas fa-times-circle"></i> Mark Selected as Closed';
@@ -868,7 +930,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (markAllAsRiskBtn) {
             markAllAsRiskBtn.disabled = false;
-            markAllAsRiskBtn.innerHTML = '<i class="fas fa-share-square"></i> Mark All as Sent To Risk';
+            markAllAsRiskBtn.innerHTML = '<i class="fas fa-share-square"></i> Mark All as Risk Raised';
         }
         if (markAllAsClosedBtn) {
             markAllAsClosedBtn.disabled = false;

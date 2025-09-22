@@ -46,9 +46,9 @@ try {
     $testFinding = $warningFindings[0];
     echo "   Found {$testFinding['name']} (ID: {$testFinding['id']}) for testing\n";
     
-    // Test 1: Mark as Sent To Risk
-    echo "\n3. Testing 'Mark as Sent To Risk'...\n";
-    $result = updateFindingStatus($pdo, $testFinding['id'], 'Sent To Risk');
+    // Test 1: Mark as Risk Raised
+    echo "\n3. Testing 'Mark as Risk Raised'...\n";
+    $result = updateFindingStatus($pdo, $testFinding['id'], 'Risk Raised');
     if ($result['success']) {
         echo "   ✓ {$result['message']}\n";
     } else {
@@ -85,7 +85,7 @@ try {
         $stmt->execute([$testFinding['id']]);
         
         $findingIds = array_slice(array_column($warningFindings, 'id'), 0, 2); // Test with first 2 findings
-        $result = updateMultipleFindingsStatus($pdo, $findingIds, 'Sent To Risk');
+        $result = updateMultipleFindingsStatus($pdo, $findingIds, 'Risk Raised');
         
         if ($result['success']) {
             echo "   ✓ Bulk update successful: {$result['success_count']}/{$result['total']} findings updated\n";

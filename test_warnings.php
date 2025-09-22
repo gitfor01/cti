@@ -37,7 +37,7 @@ try {
         echo "   This could mean:\n";
         echo "   - No high/critical findings exist\n";
         echo "   - All findings are from recent projects\n";
-        echo "   - All findings have been sent to risk\n";
+        echo "   - All findings have been marked as risk raised\n";
     } else {
         echo "   Found {$warningCount} warning findings:\n\n";
         
