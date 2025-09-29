@@ -49,7 +49,7 @@ if (!empty($monthFilter)) {
 }
 
 // Get sorting parameters
-$sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'cvss';
+$sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'created_at';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'desc';
 
 $pcfFindings = getPcfFindings($pdo, $limit, $offset, $projectFilter, $severityFilter, $statusFilter, $monthFilter, $sortBy, $sortOrder, $yearFilter);
@@ -458,7 +458,7 @@ html {
                                             $severityText = getSeverityText($finding['cvss']);
                                             ?>
                                             <span class="badge <?php echo $severityClass; ?>">
-                                                <?php echo $severityText; ?> (<?php echo number_format($finding['cvss'], 1); ?>)
+                                                <?php echo $severityText; ?>
                                             </span>
                                         </td>
                                         <td>
@@ -470,7 +470,6 @@ html {
                                             <span class="badge bg-warning text-dark">
                                                 <?php echo $finding['days_old']; ?> days
                                             </span>
-                                            <br><small class="text-muted"><?php echo $finding['age_reason']; ?></small>
                                         </td>
                                         <td>
                                             <small><?php echo date('M j, Y', strtotime($finding['created_at'])); ?></small>
@@ -730,7 +729,7 @@ html {
                 $sortLabels = [
                     'name' => 'Finding Name',
                     'project_name' => 'Project Name',
-                    'cvss' => 'Severity (CVSS)',
+                    'cvss' => 'Severity',
                     'status' => 'Status',
                     'created_at' => 'Creation Date'
                 ];
@@ -788,7 +787,6 @@ html {
                             <?php echo getSortableHeader('name', 'Finding', $sortBy, $sortOrder, $filters); ?>
                             <?php echo getSortableHeader('project_name', 'Project', $sortBy, $sortOrder, $filters); ?>
                             <?php echo getSortableHeader('cvss', 'Severity', $sortBy, $sortOrder, $filters); ?>
-                            <?php echo getSortableHeader('cvss', 'CVSS', $sortBy, $sortOrder, $filters); ?>
                             <?php echo getSortableHeader('status', 'Status', $sortBy, $sortOrder, $filters); ?>
                             <?php echo getSortableHeader('created_at', 'Created', $sortBy, $sortOrder, $filters); ?>
                         </tr>
@@ -815,11 +813,7 @@ html {
                                         <?php echo $severityText; ?>
                                     </span>
                                 </td>
-                                <td>
-                                    <span class="badge bg-dark">
-                                        <?php echo number_format($finding['cvss'], 1); ?>
-                                    </span>
-                                </td>
+
                                 <td>
                                     <span class="badge bg-<?php echo getStatusColor($finding['status']); ?>">
                                         <?php echo htmlspecialchars($finding['status'] ?: 'Unknown'); ?>
