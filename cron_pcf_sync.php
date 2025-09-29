@@ -46,7 +46,7 @@ try {
         $syncResult = syncPcfFindings($pdo);
         
         if ($syncResult['success']) {
-            logMessage("Sync completed successfully - {$syncResult['count']} findings synced");
+            logMessage("Sync completed successfully - {$syncResult['inserted']} new, {$syncResult['updated']} updated, {$syncResult['deleted']} deleted");
         } else {
             logMessage("Sync failed: {$syncResult['error']}");
         }

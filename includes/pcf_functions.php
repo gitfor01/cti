@@ -75,10 +75,12 @@ function syncPcfFindings($ctiPdo) {
         $stmt->execute();
         $pcfIssues = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        // Clear existing PCF findings
-        $ctiPdo->exec("DELETE FROM pcf_findings");
+        // Get existing CTI findings with their current status
+        $existingStmt = $ctiPdo->prepare("SELECT pcf_id, status FROM pcf_findings");
+        $existingStmt->execute();
+        $existingFindings = $existingStmt->fetchAll(PDO::FETCH_KEY_PAIR); // pcf_id => status
         
-        $insertCount = 0;
+        // Prepare statements for insert and update
         $insertStmt = $ctiPdo->prepare("
             INSERT INTO pcf_findings (
                 pcf_id, name, description, url_path, cvss, cwe, cve, status,
@@ -91,7 +93,36 @@ function syncPcfFindings($ctiPdo) {
             )
         ");
         
+        $updateStmt = $ctiPdo->prepare("
+            UPDATE pcf_findings SET
+                name = :name,
+                description = :description,
+                url_path = :url_path,
+                cvss = :cvss,
+                cwe = :cwe,
+                cve = :cve,
+                project_id = :project_id,
+                project_name = :project_name,
+                project_description = :project_description,
+                type = :type,
+                fix_description = :fix_description,
+                param = :param,
+                technical = :technical,
+                risks = :risks,
+                `references` = :references,
+                start_date = :start_date,
+                end_date = :end_date
+            WHERE pcf_id = :pcf_id
+        ");
+        
+        $insertCount = 0;
+        $updateCount = 0;
+        $pcfIds = []; // Track PCF IDs from current sync
+        
         foreach ($pcfIssues as $issue) {
+            $pcfId = $issue['id'];
+            $pcfIds[] = $pcfId;
+            
             // Use project end date as finding creation date, or current time if no end date
             $createdAt = date('Y-m-d H:i:s');
             if ($issue['end_date']) {
@@ -102,15 +133,14 @@ function syncPcfFindings($ctiPdo) {
                 $createdAt = date('Y-m-d H:i:s', $issue['start_date']);
             }
             
-            $insertStmt->execute([
-                ':pcf_id' => $issue['id'],
+            $params = [
+                ':pcf_id' => $pcfId,
                 ':name' => $issue['name'] ?: 'Unnamed Finding',
                 ':description' => $issue['description'] ?: '',
                 ':url_path' => $issue['url_path'] ?: '',
                 ':cvss' => floatval($issue['cvss']),
                 ':cwe' => intval($issue['cwe']),
                 ':cve' => $issue['cve'] ?: '',
-                ':status' => $issue['status'] ?: 'unknown',
                 ':project_id' => $issue['project_id'],
                 ':project_name' => $issue['project_name'] ?: 'Unknown Project',
                 ':project_description' => $issue['project_description'] ?: '',
@@ -121,16 +151,47 @@ function syncPcfFindings($ctiPdo) {
                 ':risks' => $issue['risks'] ?: '',
                 ':references' => $issue['references'] ?: '',
                 ':start_date' => $issue['start_date'] ? date('Y-m-d H:i:s', $issue['start_date']) : null,
-                ':end_date' => $issue['end_date'] ? date('Y-m-d H:i:s', $issue['end_date']) : null,
-                ':created_at' => $createdAt
-            ]);
-            $insertCount++;
+                ':end_date' => $issue['end_date'] ? date('Y-m-d H:i:s', $issue['end_date']) : null
+            ];
+            
+            if (isset($existingFindings[$pcfId])) {
+                // Finding exists - update all fields except status (preserve local status)
+                $updateStmt->execute($params);
+                $updateCount++;
+            } else {
+                // New finding - insert with PCF status
+                $params[':status'] = $issue['status'] ?: 'unknown';
+                $params[':created_at'] = $createdAt;
+                $insertStmt->execute($params);
+                $insertCount++;
+            }
+        }
+        
+        // Delete findings that no longer exist in PCF
+        $deleteCount = 0;
+        if (!empty($pcfIds)) {
+            $placeholders = str_repeat('?,', count($pcfIds) - 1) . '?';
+            $deleteStmt = $ctiPdo->prepare("DELETE FROM pcf_findings WHERE pcf_id NOT IN ($placeholders)");
+            $deleteStmt->execute($pcfIds);
+            $deleteCount = $deleteStmt->rowCount();
+        } else {
+            // If no PCF findings, delete all CTI findings
+            $deleteStmt = $ctiPdo->prepare("DELETE FROM pcf_findings");
+            $deleteStmt->execute();
+            $deleteCount = $deleteStmt->rowCount();
         }
         
         // Update last sync time
         updateLastSyncTime($ctiPdo);
         
-        return ['success' => true, 'count' => $insertCount];
+        return [
+            'success' => true, 
+            'inserted' => $insertCount,
+            'updated' => $updateCount,
+            'deleted' => $deleteCount,
+            'total_processed' => count($pcfIssues),
+            'count' => $insertCount + $updateCount // For backward compatibility
+        ];
         
     } catch (Exception $e) {
         error_log("PCF sync error: " . $e->getMessage());
@@ -207,44 +268,92 @@ function getPcfFindings($pdo, $limit = 50, $offset = 0, $projectFilter = '', $se
     $sql = "SELECT * FROM pcf_findings WHERE 1=1";
     $params = [];
     
+    // Handle multiple project filters
     if (!empty($projectFilter)) {
-        $sql .= " AND project_id = :project_id";
-        $params[':project_id'] = $projectFilter;
-    }
-    
-    if (!empty($severityFilter)) {
-        switch ($severityFilter) {
-            case 'critical':
-                $sql .= " AND cvss >= 9.0";
-                break;
-            case 'high':
-                $sql .= " AND cvss >= 7.0 AND cvss < 9.0";
-                break;
-            case 'medium':
-                $sql .= " AND cvss >= 4.0 AND cvss < 7.0";
-                break;
-            case 'low':
-                $sql .= " AND cvss > 0.0 AND cvss < 4.0";
-                break;
-            case 'info':
-                $sql .= " AND cvss = 0.0";
-                break;
+        if (is_array($projectFilter)) {
+            $placeholders = str_repeat('?,', count($projectFilter) - 1) . '?';
+            $sql .= " AND project_id IN ($placeholders)";
+            $params = array_merge($params, $projectFilter);
+        } else {
+            $sql .= " AND project_id = ?";
+            $params[] = $projectFilter;
         }
     }
     
-    if (!empty($statusFilter)) {
-        $sql .= " AND status = :status";
-        $params[':status'] = $statusFilter;
+    // Handle multiple severity filters
+    if (!empty($severityFilter)) {
+        if (is_array($severityFilter)) {
+            $severityConditions = [];
+            foreach ($severityFilter as $severity) {
+                switch ($severity) {
+                    case 'critical':
+                        $severityConditions[] = "cvss >= 9.0";
+                        break;
+                    case 'high':
+                        $severityConditions[] = "(cvss >= 7.0 AND cvss < 9.0)";
+                        break;
+                    case 'medium':
+                        $severityConditions[] = "(cvss >= 4.0 AND cvss < 7.0)";
+                        break;
+                    case 'low':
+                        $severityConditions[] = "(cvss > 0.0 AND cvss < 4.0)";
+                        break;
+                    case 'info':
+                        $severityConditions[] = "cvss = 0.0";
+                        break;
+                }
+            }
+            if (!empty($severityConditions)) {
+                $sql .= " AND (" . implode(' OR ', $severityConditions) . ")";
+            }
+        } else {
+            switch ($severityFilter) {
+                case 'critical':
+                    $sql .= " AND cvss >= 9.0";
+                    break;
+                case 'high':
+                    $sql .= " AND cvss >= 7.0 AND cvss < 9.0";
+                    break;
+                case 'medium':
+                    $sql .= " AND cvss >= 4.0 AND cvss < 7.0";
+                    break;
+                case 'low':
+                    $sql .= " AND cvss > 0.0 AND cvss < 4.0";
+                    break;
+                case 'info':
+                    $sql .= " AND cvss = 0.0";
+                    break;
+            }
+        }
     }
     
+    // Handle multiple status filters
+    if (!empty($statusFilter)) {
+        if (is_array($statusFilter)) {
+            $placeholders = str_repeat('?,', count($statusFilter) - 1) . '?';
+            $sql .= " AND status IN ($placeholders)";
+            $params = array_merge($params, $statusFilter);
+        } else {
+            $sql .= " AND status = ?";
+            $params[] = $statusFilter;
+        }
+    }
+    
+    // Handle multiple month filters
     if (!empty($monthFilter)) {
-        $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') = :month";
-        $params[':month'] = $monthFilter;
+        if (is_array($monthFilter)) {
+            $placeholders = str_repeat('?,', count($monthFilter) - 1) . '?';
+            $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') IN ($placeholders)";
+            $params = array_merge($params, $monthFilter);
+        } else {
+            $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') = ?";
+            $params[] = $monthFilter;
+        }
     }
     
     if (!empty($yearFilter)) {
-        $sql .= " AND YEAR(created_at) = :year";
-        $params[':year'] = $yearFilter;
+        $sql .= " AND YEAR(created_at) = ?";
+        $params[] = $yearFilter;
     }
     
     // Validate and sanitize sort parameters
@@ -280,44 +389,92 @@ function getPcfFindingsCount($pdo, $projectFilter = '', $severityFilter = '', $s
     $sql = "SELECT COUNT(*) FROM pcf_findings WHERE 1=1";
     $params = [];
     
+    // Handle multiple project filters
     if (!empty($projectFilter)) {
-        $sql .= " AND project_id = :project_id";
-        $params[':project_id'] = $projectFilter;
-    }
-    
-    if (!empty($severityFilter)) {
-        switch ($severityFilter) {
-            case 'critical':
-                $sql .= " AND cvss >= 9.0";
-                break;
-            case 'high':
-                $sql .= " AND cvss >= 7.0 AND cvss < 9.0";
-                break;
-            case 'medium':
-                $sql .= " AND cvss >= 4.0 AND cvss < 7.0";
-                break;
-            case 'low':
-                $sql .= " AND cvss > 0.0 AND cvss < 4.0";
-                break;
-            case 'info':
-                $sql .= " AND cvss = 0.0";
-                break;
+        if (is_array($projectFilter)) {
+            $placeholders = str_repeat('?,', count($projectFilter) - 1) . '?';
+            $sql .= " AND project_id IN ($placeholders)";
+            $params = array_merge($params, $projectFilter);
+        } else {
+            $sql .= " AND project_id = ?";
+            $params[] = $projectFilter;
         }
     }
     
-    if (!empty($statusFilter)) {
-        $sql .= " AND status = :status";
-        $params[':status'] = $statusFilter;
+    // Handle multiple severity filters
+    if (!empty($severityFilter)) {
+        if (is_array($severityFilter)) {
+            $severityConditions = [];
+            foreach ($severityFilter as $severity) {
+                switch ($severity) {
+                    case 'critical':
+                        $severityConditions[] = "cvss >= 9.0";
+                        break;
+                    case 'high':
+                        $severityConditions[] = "(cvss >= 7.0 AND cvss < 9.0)";
+                        break;
+                    case 'medium':
+                        $severityConditions[] = "(cvss >= 4.0 AND cvss < 7.0)";
+                        break;
+                    case 'low':
+                        $severityConditions[] = "(cvss > 0.0 AND cvss < 4.0)";
+                        break;
+                    case 'info':
+                        $severityConditions[] = "cvss = 0.0";
+                        break;
+                }
+            }
+            if (!empty($severityConditions)) {
+                $sql .= " AND (" . implode(' OR ', $severityConditions) . ")";
+            }
+        } else {
+            switch ($severityFilter) {
+                case 'critical':
+                    $sql .= " AND cvss >= 9.0";
+                    break;
+                case 'high':
+                    $sql .= " AND cvss >= 7.0 AND cvss < 9.0";
+                    break;
+                case 'medium':
+                    $sql .= " AND cvss >= 4.0 AND cvss < 7.0";
+                    break;
+                case 'low':
+                    $sql .= " AND cvss > 0.0 AND cvss < 4.0";
+                    break;
+                case 'info':
+                    $sql .= " AND cvss = 0.0";
+                    break;
+            }
+        }
     }
     
+    // Handle multiple status filters
+    if (!empty($statusFilter)) {
+        if (is_array($statusFilter)) {
+            $placeholders = str_repeat('?,', count($statusFilter) - 1) . '?';
+            $sql .= " AND status IN ($placeholders)";
+            $params = array_merge($params, $statusFilter);
+        } else {
+            $sql .= " AND status = ?";
+            $params[] = $statusFilter;
+        }
+    }
+    
+    // Handle multiple month filters
     if (!empty($monthFilter)) {
-        $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') = :month";
-        $params[':month'] = $monthFilter;
+        if (is_array($monthFilter)) {
+            $placeholders = str_repeat('?,', count($monthFilter) - 1) . '?';
+            $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') IN ($placeholders)";
+            $params = array_merge($params, $monthFilter);
+        } else {
+            $sql .= " AND DATE_FORMAT(created_at, '%Y-%m') = ?";
+            $params[] = $monthFilter;
+        }
     }
     
     if (!empty($yearFilter)) {
-        $sql .= " AND YEAR(created_at) = :year";
-        $params[':year'] = $yearFilter;
+        $sql .= " AND YEAR(created_at) = ?";
+        $params[] = $yearFilter;
     }
     
     $stmt = $pdo->prepare($sql);
@@ -662,5 +819,48 @@ function markMultipleFindingsAsRiskRaised($ctiPdo, $findingIds) {
  */
 function markMultipleFindingsAsClosed($ctiPdo, $findingIds) {
     return updateMultipleFindingsStatus($ctiPdo, $findingIds, 'Closed');
+}
+
+/**
+ * Get unique status values from the database
+ * @param PDO $pdo CTI database connection
+ * @return array Array of unique status values
+ */
+function getPcfStatusValues($pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT DISTINCT status 
+            FROM pcf_findings 
+            WHERE status IS NOT NULL 
+            AND status != '' 
+            ORDER BY status ASC
+        ");
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Exception $e) {
+        error_log("Error getting PCF status values: " . $e->getMessage());
+        // Return default status values as fallback
+        return ['open', 'fixed', 'retest', 'closed'];
+    }
+}
+
+/**
+ * Get unique creation months from the database
+ * @param PDO $pdo CTI database connection
+ * @return array Array of month data with month_year and month_name
+ */
+function getPcfCreationMonths($pdo) {
+    try {
+        $stmt = $pdo->query("
+            SELECT DISTINCT DATE_FORMAT(created_at, '%Y-%m') as month_year,
+                   DATE_FORMAT(created_at, '%M %Y') as month_name
+            FROM pcf_findings 
+            WHERE created_at IS NOT NULL
+            ORDER BY month_year DESC
+        ");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        error_log("Error getting PCF creation months: " . $e->getMessage());
+        return [];
+    }
 }
 ?>

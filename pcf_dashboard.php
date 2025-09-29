@@ -8,9 +8,14 @@ require_once 'auth.php';
 // Handle sync request
 if (isset($_POST['sync_pcf'])) {
     $syncResult = syncPcfFindings($pdo);
-    $syncMessage = $syncResult['success'] ? 
-        "Successfully synced {$syncResult['count']} findings from PCF." : 
-        "Error syncing PCF data: {$syncResult['error']}";
+    if ($syncResult['success']) {
+        $syncMessage = "Successfully synced findings from PCF: ";
+        $syncMessage .= "{$syncResult['inserted']} new, ";
+        $syncMessage .= "{$syncResult['updated']} updated, ";
+        $syncMessage .= "{$syncResult['deleted']} deleted.";
+    } else {
+        $syncMessage = "Error syncing PCF data: {$syncResult['error']}";
+    }
 }
 
 // Get PCF findings with pagination
@@ -18,12 +23,30 @@ $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 $limit = 50;
 $offset = ($page - 1) * $limit;
 
-// Get filter parameters
+// Get filter parameters - handle both single values and arrays
 $projectFilter = isset($_GET['project']) ? $_GET['project'] : '';
 $severityFilter = isset($_GET['severity']) ? $_GET['severity'] : '';
 $statusFilter = isset($_GET['status']) ? $_GET['status'] : '';
 $monthFilter = isset($_GET['month']) ? $_GET['month'] : '';
 $yearFilter = isset($_GET['year']) ? $_GET['year'] : date('Y'); // Default to current year
+
+// Convert single values to arrays if needed, and filter out empty values
+if (!empty($projectFilter)) {
+    $projectFilter = is_array($projectFilter) ? array_filter($projectFilter) : [$projectFilter];
+    $projectFilter = empty($projectFilter) ? '' : $projectFilter;
+}
+if (!empty($severityFilter)) {
+    $severityFilter = is_array($severityFilter) ? array_filter($severityFilter) : [$severityFilter];
+    $severityFilter = empty($severityFilter) ? '' : $severityFilter;
+}
+if (!empty($statusFilter)) {
+    $statusFilter = is_array($statusFilter) ? array_filter($statusFilter) : [$statusFilter];
+    $statusFilter = empty($statusFilter) ? '' : $statusFilter;
+}
+if (!empty($monthFilter)) {
+    $monthFilter = is_array($monthFilter) ? array_filter($monthFilter) : [$monthFilter];
+    $monthFilter = empty($monthFilter) ? '' : $monthFilter;
+}
 
 // Get sorting parameters
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'cvss';
@@ -35,6 +58,12 @@ $totalPages = ceil($totalFindings / $limit);
 
 // Get unique projects for filter dropdown
 $projects = getPcfProjects($pdo);
+
+// Get unique status values for filter dropdown
+$statusValues = getPcfStatusValues($pdo);
+
+// Get unique creation months for filter dropdown
+$creationMonths = getPcfCreationMonths($pdo);
 
 // Get last sync time
 $lastSync = getLastSyncTime($pdo);
@@ -48,11 +77,18 @@ include 'includes/header.php';
 ?>
 
 <style>
-.severity-critical { background-color: #dc3545; color: white; }
-.severity-high { background-color: #fd7e14; color: white; }
-.severity-medium { background-color: #ffc107; color: black; }
-.severity-low { background-color: #28a745; color: white; }
-.severity-info { background-color: #17a2b8; color: white; }
+.severity-critical { background-color: #8b0000; color: white; } /* Dark red */
+.severity-high { background-color: #dc3545; color: white; } /* Red */
+.severity-medium { background-color: #fd7e14; color: white; } /* Orange */
+.severity-low { background-color: #28a745; color: white; } /* Green */
+.severity-info { background-color: #17a2b8; color: white; } /* Light blue */
+
+/* Custom badge colors for dropdown */
+.badge-critical { background-color: #8b0000 !important; color: white !important; } /* Dark red */
+.badge-high { background-color: #dc3545 !important; color: white !important; } /* Red */
+.badge-medium { background-color: #fd7e14 !important; color: white !important; } /* Orange */
+.badge-low { background-color: #28a745 !important; color: white !important; } /* Green */
+.badge-info { background-color: #17a2b8 !important; color: white !important; } /* Light blue */
 .sync-info { font-size: 0.9em; color: #6c757d; }
 .filter-section { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
 
@@ -106,27 +142,27 @@ include 'includes/header.php';
 
 /* Severity-specific colors */
 .stat-card.critical .stat-icon {
-    background: linear-gradient(135deg, #dc3545, #c82333);
+    background: linear-gradient(135deg, #8b0000, #660000);
     color: white;
 }
 .stat-card.critical .stat-number {
-    color: #dc3545;
+    color: #8b0000;
 }
 
 .stat-card.high .stat-icon {
-    background: linear-gradient(135deg, #fd7e14, #e8690b);
+    background: linear-gradient(135deg, #dc3545, #c82333);
     color: white;
 }
 .stat-card.high .stat-number {
-    color: #fd7e14;
+    color: #dc3545;
 }
 
 .stat-card.medium .stat-icon {
-    background: linear-gradient(135deg, #ffc107, #e0a800);
-    color: #212529;
+    background: linear-gradient(135deg, #fd7e14, #e8690b);
+    color: white;
 }
 .stat-card.medium .stat-number {
-    color: #ffc107;
+    color: #fd7e14;
 }
 
 .stat-card.low .stat-icon {
@@ -195,6 +231,114 @@ html {
 /* Highlight the findings table when scrolled to */
 #findings-table {
     scroll-margin-top: 20px;
+}
+
+/* Checkbox dropdown styling */
+.dropdown-menu {
+    min-width: 100%;
+    position: absolute !important;
+    overflow: visible !important;
+    z-index: 1050;
+}
+
+.dropdown-menu .form-check {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    transition: all 0.2s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    overflow: visible;
+}
+
+.dropdown-menu .form-check:hover {
+    background-color: #f8f9fa;
+}
+
+/* Selected item styling */
+.dropdown-menu .form-check:has(input:checked) {
+    background-color: #e3f2fd;
+    border: 1px solid #2196f3;
+    box-shadow: 0 1px 3px rgba(33, 150, 243, 0.2);
+}
+
+.dropdown-menu .form-check:has(input:checked):hover {
+    background-color: #bbdefb;
+}
+
+.dropdown-menu .form-check:has(input:checked) .form-check-label {
+    color: #1976d2;
+    font-weight: 500;
+}
+
+/* Fallback for browsers that don't support :has() */
+.dropdown-menu .form-check.selected {
+    background-color: #e3f2fd;
+    border: 1px solid #2196f3;
+    box-shadow: 0 1px 3px rgba(33, 150, 243, 0.2);
+}
+
+.dropdown-menu .form-check.selected:hover {
+    background-color: #bbdefb;
+}
+
+.dropdown-menu .form-check.selected .form-check-label {
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.dropdown-menu .form-check-input {
+    position: relative !important;
+    margin-top: 0 !important;
+    margin-right: 8px;
+    margin-left: 0 !important;
+    flex-shrink: 0;
+}
+
+.dropdown-menu .form-check-input:checked {
+    background-color: #2196f3;
+    border-color: #2196f3;
+}
+
+.dropdown-menu .form-check-label {
+    cursor: pointer;
+    flex: 1;
+    padding-left: 0;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+}
+
+/* Ensure dropdown items don't clip content */
+.dropdown-menu .dropdown-item,
+.dropdown-menu .form-check {
+    position: relative;
+    overflow: visible;
+}
+
+.dropdown-toggle .filter-count {
+    font-size: 0.75rem;
+}
+
+.dropdown-menu hr {
+    margin: 0.5rem 0;
+}
+
+.dropdown-menu .btn-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+
+/* Filter section improvements */
+.filter-section .form-text {
+    font-size: 0.75rem;
+    margin-top: 2px;
+}
+
+/* Clear filters button */
+.clear-filters {
+    margin-left: 10px;
 }
 </style>
 
@@ -424,59 +568,141 @@ html {
             <form method="get" class="row g-3" action="#findings-table">
                 <!-- Hidden input to preserve year filter -->
                 <input type="hidden" name="year" value="<?php echo htmlspecialchars($yearFilter); ?>">
+        <!-- Project Filter -->
         <div class="col-md-3">
-            <label for="project" class="form-label">Project</label>
-            <select name="project" id="project" class="form-select">
-                <option value="">All Projects</option>
-                <?php foreach ($projects as $project): ?>
-                    <option value="<?php echo htmlspecialchars($project['id']); ?>" 
-                            <?php echo $projectFilter === $project['id'] ? 'selected' : ''; ?>>
-                        <?php echo htmlspecialchars($project['name']); ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <label class="form-label">Project</label>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="projectDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="filter-text">Select Projects</span>
+                    <span class="badge bg-primary ms-2 filter-count" style="display: none;">0</span>
+                </button>
+                <div class="dropdown-menu w-100 p-2" aria-labelledby="projectDropdown" style="max-height: 300px; overflow-y: auto;">
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 select-all-btn">Select All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary clear-all-btn">Clear All</button>
+                    </div>
+                    <hr class="my-2">
+                    <?php foreach ($projects as $project): ?>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="project[]" value="<?php echo htmlspecialchars($project['id']); ?>" 
+                                   id="project_<?php echo htmlspecialchars($project['id']); ?>"
+                                   <?php echo (is_array($projectFilter) && in_array($project['id'], $projectFilter)) ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="project_<?php echo htmlspecialchars($project['id']); ?>">
+                                <?php echo htmlspecialchars($project['name']); ?>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         </div>
+
+        <!-- Severity Filter -->
         <div class="col-md-3">
-            <label for="severity" class="form-label">Severity</label>
-            <select name="severity" id="severity" class="form-select">
-                <option value="">All Severities</option>
-                <option value="critical" <?php echo $severityFilter === 'critical' ? 'selected' : ''; ?>>Critical (9.0-10.0)</option>
-                <option value="high" <?php echo $severityFilter === 'high' ? 'selected' : ''; ?>>High (7.0-8.9)</option>
-                <option value="medium" <?php echo $severityFilter === 'medium' ? 'selected' : ''; ?>>Medium (4.0-6.9)</option>
-                <option value="low" <?php echo $severityFilter === 'low' ? 'selected' : ''; ?>>Low (0.1-3.9)</option>
-                <option value="info" <?php echo $severityFilter === 'info' ? 'selected' : ''; ?>>Info (0.0)</option>
-            </select>
+            <label class="form-label">Severity</label>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="severityDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="filter-text">Select Severity</span>
+                    <span class="badge bg-primary ms-2 filter-count" style="display: none;">0</span>
+                </button>
+                <div class="dropdown-menu w-100 p-2" aria-labelledby="severityDropdown">
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 select-all-btn">Select All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary clear-all-btn">Clear All</button>
+                    </div>
+                    <hr class="my-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="severity[]" value="critical" id="severity_critical"
+                               <?php echo (is_array($severityFilter) && in_array('critical', $severityFilter)) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="severity_critical">
+                            <span class="badge badge-critical me-2">Critical</span> (9.0-10.0)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="severity[]" value="high" id="severity_high"
+                               <?php echo (is_array($severityFilter) && in_array('high', $severityFilter)) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="severity_high">
+                            <span class="badge badge-high me-2">High</span> (7.0-8.9)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="severity[]" value="medium" id="severity_medium"
+                               <?php echo (is_array($severityFilter) && in_array('medium', $severityFilter)) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="severity_medium">
+                            <span class="badge badge-medium me-2">Medium</span> (4.0-6.9)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="severity[]" value="low" id="severity_low"
+                               <?php echo (is_array($severityFilter) && in_array('low', $severityFilter)) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="severity_low">
+                            <span class="badge badge-low me-2">Low</span> (0.1-3.9)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="severity[]" value="info" id="severity_info"
+                               <?php echo (is_array($severityFilter) && in_array('info', $severityFilter)) ? 'checked' : ''; ?>>
+                        <label class="form-check-label" for="severity_info">
+                            <span class="badge badge-info me-2">Info</span> (0.0)
+                        </label>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <!-- Status Filter -->
         <div class="col-md-2">
-            <label for="status" class="form-label">Status</label>
-            <select name="status" id="status" class="form-select">
-                <option value="">All Statuses</option>
-                <option value="open" <?php echo $statusFilter === 'open' ? 'selected' : ''; ?>>Open</option>
-                <option value="fixed" <?php echo $statusFilter === 'fixed' ? 'selected' : ''; ?>>Fixed</option>
-                <option value="retest" <?php echo $statusFilter === 'retest' ? 'selected' : ''; ?>>Retest</option>
-                <option value="closed" <?php echo $statusFilter === 'closed' ? 'selected' : ''; ?>>Closed</option>
-            </select>
+            <label class="form-label">Status</label>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="statusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="filter-text">Select Status</span>
+                    <span class="badge bg-primary ms-2 filter-count" style="display: none;">0</span>
+                </button>
+                <div class="dropdown-menu w-100 p-2" aria-labelledby="statusDropdown">
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 select-all-btn">Select All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary clear-all-btn">Clear All</button>
+                    </div>
+                    <hr class="my-2">
+                    <?php foreach ($statusValues as $status): ?>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="status[]" value="<?php echo htmlspecialchars($status); ?>" 
+                                   id="status_<?php echo htmlspecialchars(str_replace([' ', '-', '.'], '_', strtolower($status))); ?>"
+                                   <?php echo (is_array($statusFilter) && in_array($status, $statusFilter)) ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="status_<?php echo htmlspecialchars(str_replace([' ', '-', '.'], '_', strtolower($status))); ?>">
+                                <?php echo htmlspecialchars(ucfirst($status)); ?>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         </div>
+
+        <!-- Month Filter -->
         <div class="col-md-2">
-            <label for="month" class="form-label">Creation Month</label>
-            <select name="month" id="month" class="form-select">
-                <option value="">All Months</option>
-                <?php
-                // Get available months from the database
-                $monthStmt = $pdo->query("
-                    SELECT DISTINCT DATE_FORMAT(created_at, '%Y-%m') as month_year,
-                           DATE_FORMAT(created_at, '%M %Y') as month_name
-                    FROM pcf_findings 
-                    ORDER BY month_year DESC
-                ");
-                $months = $monthStmt->fetchAll(PDO::FETCH_ASSOC);
-                foreach ($months as $month):
-                ?>
-                    <option value="<?php echo $month['month_year']; ?>" <?php echo $monthFilter === $month['month_year'] ? 'selected' : ''; ?>>
-                        <?php echo $month['month_name']; ?>
-                    </option>
-                <?php endforeach; ?>
-            </select>
+            <label class="form-label">Creation Month</label>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start" type="button" id="monthDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    <span class="filter-text">Select Months</span>
+                    <span class="badge bg-primary ms-2 filter-count" style="display: none;">0</span>
+                </button>
+                <div class="dropdown-menu w-100 p-2" aria-labelledby="monthDropdown" style="max-height: 300px; overflow-y: auto;">
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary me-1 select-all-btn">Select All</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary clear-all-btn">Clear All</button>
+                    </div>
+                    <hr class="my-2">
+                    <?php foreach ($creationMonths as $month): ?>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="month[]" value="<?php echo htmlspecialchars($month['month_year']); ?>" 
+                                   id="month_<?php echo str_replace('-', '_', $month['month_year']); ?>"
+                                   <?php echo (is_array($monthFilter) && in_array($month['month_year'], $monthFilter)) ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="month_<?php echo str_replace('-', '_', $month['month_year']); ?>">
+                                <?php echo htmlspecialchars($month['month_name']); ?>
+                            </label>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         </div>
         <div class="col-md-2">
             <label class="form-label">&nbsp;</label>
@@ -484,7 +710,7 @@ html {
                 <button type="submit" class="btn btn-outline-primary">
                     <i class="fas fa-filter"></i> Filter
                 </button>
-                <a href="pcf_dashboard.php" class="btn btn-outline-secondary">
+                <a href="pcf_dashboard.php" class="btn btn-outline-secondary clear-filters">
                     <i class="fas fa-times"></i> Clear
                 </a>
             </div>
@@ -534,7 +760,15 @@ html {
                                 $url = '?sort=' . $column . '&order=' . $newOrder;
                                 foreach ($filters as $key => $value) {
                                     if (!empty($value)) {
-                                        $url .= '&' . $key . '=' . urlencode($value);
+                                        if (is_array($value)) {
+                                            // Handle array values (multiple selections)
+                                            foreach ($value as $item) {
+                                                $url .= '&' . $key . '[]=' . urlencode($item);
+                                            }
+                                        } else {
+                                            // Handle single values
+                                            $url .= '&' . $key . '=' . urlencode($value);
+                                        }
                                     }
                                 }
                                 $url .= '#findings-table';
@@ -1033,6 +1267,103 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.pagination a').forEach(link => {
         link.addEventListener('click', function() {
             saveScrollPosition();
+        });
+    });
+
+    // Enhanced checkbox dropdown functionality
+    function updateDropdownText(dropdown) {
+        const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]:checked');
+        const button = dropdown.querySelector('.dropdown-toggle');
+        const filterText = button.querySelector('.filter-text');
+        const filterCount = button.querySelector('.filter-count');
+        const count = checkboxes.length;
+        
+        if (count > 0) {
+            filterCount.textContent = count;
+            filterCount.style.display = 'inline';
+            button.classList.add('btn-primary');
+            button.classList.remove('btn-outline-secondary');
+            
+            // Update text based on selections
+            if (count === 1) {
+                const selectedLabel = dropdown.querySelector('input[type="checkbox"]:checked').nextElementSibling.textContent.trim();
+                filterText.textContent = selectedLabel.length > 20 ? selectedLabel.substring(0, 20) + '...' : selectedLabel;
+            } else {
+                const originalText = filterText.getAttribute('data-original') || filterText.textContent;
+                filterText.textContent = originalText;
+            }
+        } else {
+            filterCount.style.display = 'none';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-outline-secondary');
+            const originalText = filterText.getAttribute('data-original') || filterText.textContent;
+            filterText.textContent = originalText;
+        }
+    }
+    
+    // Initialize dropdown functionality
+    document.querySelectorAll('.dropdown').forEach(function(dropdown) {
+        const button = dropdown.querySelector('.dropdown-toggle');
+        const filterText = button.querySelector('.filter-text');
+        const selectAllBtn = dropdown.querySelector('.select-all-btn');
+        const clearAllBtn = dropdown.querySelector('.clear-all-btn');
+        const checkboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+        
+        // Store original text
+        if (!filterText.getAttribute('data-original')) {
+            filterText.setAttribute('data-original', filterText.textContent);
+        }
+        
+        // Initialize display
+        updateDropdownText(dropdown);
+        
+        // Handle checkbox changes
+        checkboxes.forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                // Update visual styling for selected items
+                const formCheck = this.closest('.form-check');
+                if (this.checked) {
+                    formCheck.classList.add('selected');
+                } else {
+                    formCheck.classList.remove('selected');
+                }
+                updateDropdownText(dropdown);
+            });
+            
+            // Initialize selected state on page load
+            const formCheck = checkbox.closest('.form-check');
+            if (checkbox.checked) {
+                formCheck.classList.add('selected');
+            }
+        });
+        
+        // Handle Select All button
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = true;
+                    checkbox.closest('.form-check').classList.add('selected');
+                });
+                updateDropdownText(dropdown);
+            });
+        }
+        
+        // Handle Clear All button
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = false;
+                    checkbox.closest('.form-check').classList.remove('selected');
+                });
+                updateDropdownText(dropdown);
+            });
+        }
+        
+        // Prevent dropdown from closing when clicking inside
+        dropdown.querySelector('.dropdown-menu').addEventListener('click', function(e) {
+            e.stopPropagation();
         });
     });
 });
