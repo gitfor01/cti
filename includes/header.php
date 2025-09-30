@@ -68,6 +68,15 @@ if (session_status() === PHP_SESSION_NONE) {
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <li class="nav-item"><a class="nav-link" href="index.php">CTI Dashboard</a></li>
                         <li class="nav-item"><a class="nav-link" href="pcf_dashboard.php">PT Dashboard</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="vaDropdown" role="button" data-bs-toggle="dropdown">
+                                VA Dashboard
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="va_dashboard.php">Live Connection</a></li>
+                                <li><a class="dropdown-item" href="va_demo.php">Demo Version</a></li>
+                            </ul>
+                        </li>
                         <li class="nav-item"><a class="nav-link" href="ip_lookup.php">IP Lookup</a></li>
                         <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
                             <li class="nav-item"><a class="nav-link" href="admin.php">Admin</a></li>
