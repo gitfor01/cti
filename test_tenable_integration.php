@@ -357,7 +357,7 @@ header('Content-Type: text/html; charset=utf-8');
             
             <div class="form-section">
                 <h2 style="margin-bottom: 20px; color: #333;">Enter Tenable SC Credentials</h2>
-                <form method="POST" action="">
+                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
                     <div class="form-group">
                         <label for="scHost">Tenable SC Host URL</label>
                         <input type="text" id="scHost" name="scHost" 
