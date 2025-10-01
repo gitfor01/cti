@@ -280,24 +280,24 @@ header('Content-Type: text/html; charset=utf-8');
             border-bottom: none;
         }
         
-        .spinner {
-            display: none;
-            text-align: center;
-            padding: 20px;
+        .progress-indicator {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
-        .spinner.active {
-            display: block;
-        }
-        
-        .spinner-icon {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+        .progress-indicator .spinner-small {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #ffc107;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 20px;
+            height: 20px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
         }
         
         @keyframes spin {
@@ -322,26 +322,6 @@ header('Content-Type: text/html; charset=utf-8');
             line-height: 1.8;
         }
         
-        .progress-indicator {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 10px 0;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .progress-indicator .spinner-small {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #ffc107;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-        }
-        
         .stop-test-btn {
             background: #dc3545;
             color: white;
@@ -363,7 +343,7 @@ header('Content-Type: text/html; charset=utf-8');
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔍 Tenable Security Center Integration Test Suite</h1>
+            <h1>Tenable Security Center Integration Test Suite</h1>
             <p>Comprehensive validation of all API endpoints and optimization methods</p>
         </div>
         
@@ -377,7 +357,9 @@ header('Content-Type: text/html; charset=utf-8');
                         <label for="scHost">Tenable SC Host URL</label>
                         <input type="text" id="scHost" name="scHost" 
                                placeholder="https://your-tenable-sc.com" 
+                               value="<?php echo isset($_POST['scHost']) ? htmlspecialchars($_POST['scHost']) : ''; ?>"
                                required>
+                        <small style="color: #666; display: block; margin-top: 5px;">Must include https:// and domain name</small>
                     </div>
                     
                     <div class="form-row">
@@ -406,24 +388,24 @@ header('Content-Type: text/html; charset=utf-8');
                     </div>
                     
                     <button type="submit" name="run_test" class="btn">
-                        🚀 Run Integration Tests
+                        Run Integration Tests
                     </button>
                 </form>
             </div>
             
             <div class="test-section">
-                <h3>📋 What This Test Will Validate:</h3>
+                <h3>What This Test Will Validate:</h3>
                 <ul style="margin-left: 20px; line-height: 2;">
-                    <li>✅ Connection to Tenable Security Center</li>
-                    <li>✅ API authentication with provided credentials</li>
-                    <li>✅ New vulnerabilities query (by severity)</li>
-                    <li>✅ Closed vulnerabilities query (by severity)</li>
-                    <li>✅ Current vulnerabilities count</li>
-                    <li>✅ VGI Optimization Method 1: sumid with count field (fastest)</li>
-                    <li>✅ VGI Optimization Method 2: bulk export with aggregation (recommended)</li>
-                    <li>✅ VGI Optimization Method 3: individual plugin queries (fallback)</li>
-                    <li>✅ Data integrity and calculation accuracy</li>
-                    <li>✅ Performance metrics for each method</li>
+                    <li>Connection to Tenable Security Center</li>
+                    <li>API authentication with provided credentials</li>
+                    <li>New vulnerabilities query (by severity)</li>
+                    <li>Closed vulnerabilities query (by severity)</li>
+                    <li>Current vulnerabilities count</li>
+                    <li>VGI Optimization Method 1: sumid with count field (fastest)</li>
+                    <li>VGI Optimization Method 2: bulk export with aggregation (recommended)</li>
+                    <li>VGI Optimization Method 3: individual plugin queries (fallback)</li>
+                    <li>Data integrity and calculation accuracy</li>
+                    <li>Performance metrics for each method</li>
                 </ul>
             </div>
             
@@ -451,9 +433,9 @@ header('Content-Type: text/html; charset=utf-8');
                 flush();
                 
                 // Run the actual tests
-                $scHost = $_POST['scHost'];
-                $accessKey = $_POST['accessKey'];
-                $secretKey = $_POST['secretKey'];
+                $scHost = trim($_POST['scHost']);
+                $accessKey = trim($_POST['accessKey']);
+                $secretKey = trim($_POST['secretKey']);
                 $testDepth = $_POST['testDepth'] ?? 'standard';
                 
                 runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth);
@@ -470,10 +452,8 @@ header('Content-Type: text/html; charset=utf-8');
 
 /**
  * Force output to browser immediately
- * Adds padding to overcome browser buffering thresholds
  */
 function forceFlush() {
-    // Add 1KB of padding to ensure browser displays content immediately
     echo str_repeat(' ', 1024);
     if (ob_get_level() > 0) {
         ob_flush();
@@ -516,39 +496,85 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     
     // Add stop button at the top
     echo '<div style="text-align: center; margin-bottom: 20px;">';
-    echo '<button onclick="window.location.href=window.location.href.split(\'?\')[0];" class="stop-test-btn">⏹ Stop Test & Return</button>';
+    echo '<button onclick="window.location.href=window.location.href.split(\'?\')[0];" class="stop-test-btn">Stop Test & Return</button>';
     echo '<p style="color: #666; margin-top: 10px;">You can stop the test at any time using the button above</p>';
     echo '</div>';
     forceFlush();
     
     echo '<div class="test-section">';
-    echo '<h3>🔌 Test 1: Connection & Authentication</h3>';
+    echo '<h3>Test 1: Connection & Authentication</h3>';
     forceFlush();
     
+    // Validate URL format first
+    if (!filter_var($scHost, FILTER_VALIDATE_URL)) {
+        echo '<div class="test-item error">';
+        echo '<div class="status"><span class="badge error">FAILED</span> Invalid URL Format</div>';
+        echo '<div class="details">';
+        echo 'The host URL must be properly formatted (e.g., https://your-tenable-sc.com)<br>';
+        echo 'Provided: ' . htmlspecialchars($scHost);
+        echo '</div>';
+        echo '</div>';
+        echo '</div>';
+        forceFlush();
+        return;
+    }
+    
+    // Test basic network connectivity
+    showProgress('Testing network connectivity to ' . htmlspecialchars($scHost) . '...');
+    $urlParts = parse_url($scHost);
+    $host = $urlParts['host'] ?? '';
+    $port = $urlParts['port'] ?? 443;
+    
+    if ($host && function_exists('fsockopen')) {
+        $fp = @fsockopen($host, $port, $errno, $errstr, 10);
+        if (!$fp) {
+            clearProgress();
+            echo '<div class="test-item error">';
+            echo '<div class="status"><span class="badge error">FAILED</span> Cannot Reach Host</div>';
+            echo '<div class="details">';
+            echo 'Unable to connect to ' . htmlspecialchars($host) . ':' . $port . '<br>';
+            echo 'Error: ' . htmlspecialchars($errstr) . ' (Code: ' . $errno . ')<br>';
+            echo '<br><strong>Common causes:</strong><br>';
+            echo '- Incorrect hostname or URL<br>';
+            echo '- Firewall blocking connection<br>';
+            echo '- VPN required but not connected<br>';
+            echo '- Server is down or unreachable';
+            echo '</div>';
+            echo '</div>';
+            echo '</div>';
+            forceFlush();
+            return;
+        }
+        fclose($fp);
+    }
+    clearProgress();
+    
     try {
-        showProgress('Connecting to Tenable Security Center...');
+        showProgress('Loading Tenable SC API client...');
         require_once 'va_api.php';
+        clearProgress();
+        
+        showProgress('Initializing API connection...');
         $api = new TenableSCAPI($scHost, $accessKey, $secretKey);
         clearProgress();
         
-        showProgress('Testing authentication with API keys...');
-        // Test connection and get detailed debug information
+        showProgress('Testing authentication and API access...');
         $connectionDebug = $api->testConnection();
         clearProgress();
         
         if ($connectionDebug['success']) {
             echo '<div class="test-item success">';
-            echo '<div class="status"><span class="badge success">✓ PASSED</span> Connection Successful</div>';
+            echo '<div class="status"><span class="badge success">PASSED</span> Connection Successful</div>';
             echo '<div class="details">';
             echo '<strong>Connection Details:</strong><br>';
-            echo '• Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
-            echo '• Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
-            echo '• HTTP Status: ' . $connectionDebug['http_code'] . ' OK<br>';
-            echo '• Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
+            echo 'Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
+            echo 'Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
+            echo 'HTTP Status: ' . $connectionDebug['http_code'] . ' OK<br>';
+            echo 'Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
             echo '<br><strong>API Response:</strong><br>';
-            echo '• Response Type: ' . htmlspecialchars($connectionDebug['sample_response']['response_type']) . '<br>';
-            echo '• Total Records Found: ' . $connectionDebug['sample_response']['total_records'] . '<br>';
-            echo '• Has Results: ' . ($connectionDebug['sample_response']['has_results'] ? 'Yes' : 'No') . '<br>';
+            echo 'Response Type: ' . htmlspecialchars($connectionDebug['sample_response']['response_type']) . '<br>';
+            echo 'Total Records Found: ' . $connectionDebug['sample_response']['total_records'] . '<br>';
+            echo 'Has Results: ' . ($connectionDebug['sample_response']['has_results'] ? 'Yes' : 'No') . '<br>';
             echo '</div>';
             echo '</div>';
             forceFlush();
@@ -561,34 +587,33 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     } catch (Exception $e) {
         clearProgress();
         echo '<div class="test-item error">';
-        echo '<div class="status"><span class="badge error">✗ FAILED</span> Connection Failed</div>';
+        echo '<div class="status"><span class="badge error">FAILED</span> Connection Failed</div>';
         echo '<div class="details">';
         echo '<strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '<br>';
         
-        // Show debug info if available
         if (isset($connectionDebug)) {
             echo '<br><strong>Debug Information:</strong><br>';
-            echo '• Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
-            echo '• Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
+            echo 'Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
+            echo 'Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
             if ($connectionDebug['http_code']) {
-                echo '• HTTP Status: ' . $connectionDebug['http_code'] . '<br>';
+                echo 'HTTP Status: ' . $connectionDebug['http_code'] . '<br>';
             }
             if ($connectionDebug['response_time_ms'] > 0) {
-                echo '• Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
-            }
-            if ($connectionDebug['sample_response']) {
-                echo '• Sample Response: ' . htmlspecialchars(substr(print_r($connectionDebug['sample_response'], true), 0, 200)) . '<br>';
+                echo 'Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
             }
         }
         
+        echo '<br><strong>Troubleshooting:</strong><br>';
+        echo '- Verify your API keys are correct<br>';
+        echo '- Ensure your account has API access permissions<br>';
+        echo '- Check if API access is enabled on the Tenable SC instance<br>';
+        echo '- Verify the URL includes https:// protocol';
         echo '</div>';
         echo '</div>';
         echo '</div>';
         forceFlush();
         
         $results['connection'] = false;
-        
-        // Show final summary
         showFinalSummary($results, microtime(true) - $startTime);
         return;
     }
@@ -598,7 +623,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     
     // Test 2: Vulnerability Queries
     echo '<div class="test-section">';
-    echo '<h3>📊 Test 2: Vulnerability Data Queries</h3>';
+    echo '<h3>Test 2: Vulnerability Data Queries</h3>';
     forceFlush();
     
     $endTime = time();
@@ -611,7 +636,6 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         '1' => 'Low'
     ];
     
-    // Limit severities based on test depth
     if ($testDepth === 'quick') {
         $severities = ['4' => 'Critical'];
     }
@@ -626,7 +650,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             clearProgress();
             
             echo '<div class="test-item success">';
-            echo '<div class="status"><span class="badge success">✓ PASSED</span> ' . $sevName . ' Severity Queries</div>';
+            echo '<div class="status"><span class="badge success">PASSED</span> ' . $sevName . ' Severity Queries</div>';
             echo '<div class="details">';
             echo 'New vulnerabilities: <strong>' . $newCount . '</strong><br>';
             echo 'Closed vulnerabilities: <strong>' . $closedCount . '</strong><br>';
@@ -646,7 +670,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         } catch (Exception $e) {
             clearProgress();
             echo '<div class="test-item error">';
-            echo '<div class="status"><span class="badge error">✗ FAILED</span> ' . $sevName . ' Severity Queries</div>';
+            echo '<div class="status"><span class="badge error">FAILED</span> ' . $sevName . ' Severity Queries</div>';
             echo '<div class="details">Error: ' . htmlspecialchars($e->getMessage()) . '</div>';
             echo '</div>';
             forceFlush();
@@ -660,7 +684,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     
     // Test 3: VGI Optimization Methods
     echo '<div class="test-section">';
-    echo '<h3>⚡ Test 3: VGI Calculation Optimization Methods</h3>';
+    echo '<h3>Test 3: VGI Calculation Optimization Methods</h3>';
     echo '<p style="margin-bottom: 15px; color: #666;">Testing all three optimization approaches to determine which works best in your environment.</p>';
     forceFlush();
     
@@ -674,13 +698,20 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         try {
             showProgress("Calculating {$sevName} severity asset instances (testing optimization methods)...");
             $methodStartTime = microtime(true);
-            $result = $api->getVulnerabilityAssetInstances($endTime, $sevCode);
+            
+            $progressCallback = function($message) use ($sevName) {
+                clearProgress();
+                showProgress("{$sevName}: $message");
+            };
+            
+            $result = $api->getVulnerabilityAssetInstances($endTime, $sevCode, $progressCallback);
             $methodDuration = microtime(true) - $methodStartTime;
             clearProgress();
             
             $method = $result['method_used'] ?? 'unknown';
             $assetInstances = $result['asset_instances'] ?? 0;
             $vulnCount = $result['vuln_count'] ?? 0;
+            $apiCalls = $result['api_calls'] ?? 0;
             
             $methodNames = [
                 'sumid_count_field' => 'Method 1: sumid with count field',
@@ -701,8 +732,17 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             echo '<span class="badge ' . $methodColor . '">' . $methodName . '</span><br><br>';
             echo 'Total vulnerabilities: <strong>' . $vulnCount . '</strong><br>';
             echo 'Total asset instances: <strong>' . $assetInstances . '</strong><br>';
+            echo 'API calls made: <strong>' . $apiCalls . '</strong><br>';
             echo 'Execution time: <strong>' . round($methodDuration, 2) . 's</strong><br>';
-            echo 'Average instances per vulnerability: <strong>' . ($vulnCount > 0 ? round($assetInstances / $vulnCount, 2) : 0) . '</strong>';
+            echo 'Average instances per vulnerability: <strong>' . ($vulnCount > 0 ? round($assetInstances / $vulnCount, 2) : 0) . '</strong><br>';
+            
+            if ($method === 'individual_queries') {
+                echo '<br><div style="background: #fff3cd; padding: 10px; border-radius: 5px; border-left: 4px solid #ffc107;">';
+                echo '<strong>Performance Warning:</strong> This method makes ' . $apiCalls . ' API calls with 10ms delays. ';
+                echo 'Consider optimizing your Tenable SC configuration to enable faster methods.';
+                echo '</div>';
+            }
+            
             echo '</div>';
             forceFlush();
             
@@ -738,7 +778,6 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         echo '</div>';
         forceFlush();
         
-        // For quick test, only test one severity
         if ($testDepth === 'quick') {
             break;
         }
@@ -751,7 +790,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     if (!empty($optimizationResults)) {
         showProgress('Analyzing performance metrics...');
         echo '<div class="test-section">';
-        echo '<h3>📈 Test 4: Performance Analysis</h3>';
+        echo '<h3>Test 4: Performance Analysis</h3>';
         clearProgress();
         forceFlush();
         
@@ -786,7 +825,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             ];
             $color = $methodColors[$result['method']] ?? 'info';
             
-            echo '<td><span class="badge ' . $color . '">✓</span></td>';
+            echo '<td><span class="badge ' . $color . '">PASSED</span></td>';
             echo '</tr>';
             
             $totalDuration += $result['duration'];
@@ -822,10 +861,10 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         echo '</div>';
         forceFlush();
         
-        // Show recommendations
+        // Recommendations
         showProgress('Generating recommendations...');
         echo '<div class="recommendation">';
-        echo '<h3>💡 Recommendations Based on Test Results</h3>';
+        echo '<h3>Recommendations Based on Test Results</h3>';
         echo '<ul>';
         clearProgress();
         
@@ -857,7 +896,6 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         forceFlush();
     }
     
-    // Show final summary
     showProgress('Preparing final summary...');
     showFinalSummary($results, microtime(true) - $startTime);
     clearProgress();
@@ -874,7 +912,7 @@ function showFinalSummary($results, $totalDuration) {
     $successRate = $total > 0 ? round(($passed / $total) * 100, 1) : 0;
     
     echo '<div class="test-section" style="border-left-color: ' . ($failed === 0 ? '#28a745' : '#ffc107') . ';">';
-    echo '<h3>📊 Final Test Summary</h3>';
+    echo '<h3>Final Test Summary</h3>';
     forceFlush();
     
     echo '<div class="summary-grid">';
@@ -904,26 +942,26 @@ function showFinalSummary($results, $totalDuration) {
     
     if ($failed === 0) {
         echo '<div class="test-item success" style="margin-top: 20px;">';
-        echo '<div class="status"><span class="badge success">✓ ALL TESTS PASSED</span></div>';
+        echo '<div class="status"><span class="badge success">ALL TESTS PASSED</span></div>';
         echo '<div class="details">';
         echo '<strong>Your Tenable Security Center integration is ready for production!</strong><br><br>';
-        echo '✅ All API endpoints are working correctly<br>';
-        echo '✅ Authentication is successful<br>';
-        echo '✅ VGI optimization methods are functional<br>';
-        echo '✅ Data integrity validated<br><br>';
+        echo 'All API endpoints are working correctly<br>';
+        echo 'Authentication is successful<br>';
+        echo 'VGI optimization methods are functional<br>';
+        echo 'Data integrity validated<br><br>';
         echo 'You can now proceed with confidence to start your data synchronization.';
         echo '</div>';
         echo '</div>';
     } else {
         echo '<div class="test-item warning" style="margin-top: 20px;">';
-        echo '<div class="status"><span class="badge warning">⚠ SOME TESTS FAILED</span></div>';
+        echo '<div class="status"><span class="badge warning">SOME TESTS FAILED</span></div>';
         echo '<div class="details">';
         echo '<strong>Please review the failed tests above before proceeding.</strong><br><br>';
         echo 'Common issues:<br>';
-        echo '• Incorrect API credentials<br>';
-        echo '• Network connectivity problems<br>';
-        echo '• Insufficient API permissions<br>';
-        echo '• Tenable SC configuration limitations<br><br>';
+        echo '- Incorrect API credentials<br>';
+        echo '- Network connectivity problems<br>';
+        echo '- Insufficient API permissions<br>';
+        echo '- Tenable SC configuration limitations<br><br>';
         echo 'Review the error messages above and correct any issues before starting production sync.';
         echo '</div>';
         echo '</div>';
@@ -932,12 +970,10 @@ function showFinalSummary($results, $totalDuration) {
     echo '</div>';
     forceFlush();
     
-    // Add button to run test again or go back
     echo '<div style="margin-top: 30px; text-align: center;">';
     echo '<form method="GET" action="" style="display: inline-block; margin-right: 10px;">';
-    echo '<button type="submit" class="btn" style="width: auto; padding: 12px 30px;">🔄 Run Another Test</button>';
+    echo '<button type="submit" class="btn" style="width: auto; padding: 12px 30px;">Run Another Test</button>';
     echo '</form>';
-    echo '<a href="index.php" class="btn" style="display: inline-block; width: auto; padding: 12px 30px; text-decoration: none;">← Back to Dashboard</a>';
     echo '</div>';
     forceFlush();
 }

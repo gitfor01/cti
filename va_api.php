@@ -52,14 +52,13 @@ try {
     
     $results = [];
     $previousVGI = 0;
-    $methodsUsed = []; // Track which optimization methods were used
+    $methodsUsed = [];
     
     // Analyze each month
     for ($i = $monthsToAnalyze - 1; $i >= 0; $i--) {
         list($startTime, $endTime) = getMonthTimestamps($i);
         $monthName = date('M Y', $startTime);
         
-        // Get comprehensive vulnerability data with severity breakdown and asset counts
         $monthData = $api->getMonthlyVulnerabilityData($startTime, $endTime);
         
         // Track optimization methods used
@@ -70,11 +69,8 @@ try {
             }
         }
         
-        // Calculate net change
         $netChange = $monthData['totals']['new'] - $monthData['totals']['closed'];
         
-        // Calculate VGI using the corrected formula
-        // VGI = Sum of (severity_weight × affected_asset_count) for each vulnerability / 100
         $vgi = calculateVGI(
             $monthData['vgi_data']['critical_asset_instances'],
             $monthData['vgi_data']['high_asset_instances'],
@@ -82,7 +78,6 @@ try {
             $monthData['vgi_data']['low_asset_instances']
         );
         
-        // Calculate VGI change from previous month
         $vgiChange = $vgi - $previousVGI;
         $previousVGI = $vgi;
         
@@ -132,8 +127,6 @@ try {
 
 /**
  * Calculate Vulnerability Generic Index
- * Formula: ((Critical_instances×4) + (High_instances×3) + (Medium_instances×2) + (Low_instances×1)) ÷ 100
- * Where instances = sum of affected assets across all vulnerabilities of that severity
  */
 function calculateVGI($criticalAssetInstances, $highAssetInstances, 
                       $mediumAssetInstances, $lowAssetInstances) {
@@ -155,23 +148,20 @@ class TenableSCAPI {
     private $accessKey;
     private $secretKey;
     
-    // Severity mappings
     const SEVERITY_CRITICAL = '4';
     const SEVERITY_HIGH = '3';
     const SEVERITY_MEDIUM = '2';
     const SEVERITY_LOW = '1';
     const SEVERITY_INFO = '0';
     
-    // Severity weights for VGI calculation
     const WEIGHT_CRITICAL = 4;
     const WEIGHT_HIGH = 3;
     const WEIGHT_MEDIUM = 2;
     const WEIGHT_LOW = 1;
     
-    // Pagination settings
-    const PAGE_SIZE = 5000; // Fetch 5000 records per request
-    const MAX_VULNS_PER_SEVERITY = 50000; // Safety limit: max 50k vulnerabilities per severity
-    const MAX_BULK_REQUESTS = 100; // Safety limit for bulk export
+    const PAGE_SIZE = 5000;
+    const MAX_VULNS_PER_SEVERITY = 50000;
+    const MAX_BULK_REQUESTS = 100;
     
     public function __construct($host, $accessKey, $secretKey) {
         $this->host = rtrim($host, '/');
@@ -180,7 +170,7 @@ class TenableSCAPI {
     }
     
     /**
-     * Test connection and return detailed debug information
+     * Test connection with lightweight query and better error handling
      * @return array Connection details including response time, HTTP code, and sample data
      */
     public function testConnection() {
@@ -196,9 +186,9 @@ class TenableSCAPI {
         ];
         
         try {
-            // Make a simple test query
+            // Use a VERY lightweight query - just check last 24 hours, limit 1
             $testEndTime = time();
-            $testStartTime = $testEndTime - (30 * 86400); // Last 30 days
+            $testStartTime = $testEndTime - 86400; // Only last 24 hours
             
             $requestData = [
                 'type' => 'vuln',
@@ -208,14 +198,9 @@ class TenableSCAPI {
                     'type' => 'vuln',
                     'filters' => [
                         [
-                            'filterName' => 'firstSeen',
-                            'operator' => '=',
-                            'value' => $testStartTime . '-' . $testEndTime
-                        ],
-                        [
-                            'filterName' => 'severity',
-                            'operator' => '=',
-                            'value' => '4'
+                            'filterName' => 'lastSeen',
+                            'operator' => '>=',
+                            'value' => (string)$testStartTime
                         ]
                     ]
                 ],
@@ -229,12 +214,16 @@ class TenableSCAPI {
             curl_setopt($ch, CURLOPT_URL, $url);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
             curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_MAXREDIRS, 3);
             
             $headers = [
                 'x-apikey: accesskey=' . $this->accessKey . '; secretkey=' . $this->secretKey . ';',
-                'Content-Type: application/json'
+                'Content-Type: application/json',
+                'Accept: application/json'
             ];
             curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
             curl_setopt($ch, CURLOPT_POST, true);
@@ -242,17 +231,29 @@ class TenableSCAPI {
             
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $debugInfo['http_code'] = $httpCode;
+            $curlError = curl_error($ch);
+            $curlErrno = curl_errno($ch);
             
-            if (curl_errno($ch)) {
-                $debugInfo['error'] = 'cURL Error: ' . curl_error($ch);
+            $debugInfo['http_code'] = $httpCode;
+            $debugInfo['response_time_ms'] = round((microtime(true) - $startTime) * 1000, 2);
+            
+            if ($curlErrno !== 0) {
+                $debugInfo['error'] = "cURL Error ($curlErrno): $curlError";
                 curl_close($ch);
                 return $debugInfo;
             }
             
             curl_close($ch);
             
-            $debugInfo['response_time_ms'] = round((microtime(true) - $startTime) * 1000, 2);
+            if ($httpCode === 0) {
+                $debugInfo['error'] = 'No response from server. Check URL and network connectivity.';
+                return $debugInfo;
+            }
+            
+            if ($httpCode === 401 || $httpCode === 403) {
+                $debugInfo['error'] = "Authentication failed (HTTP $httpCode). Check your API keys.";
+                return $debugInfo;
+            }
             
             if ($httpCode !== 200) {
                 $debugInfo['error'] = "HTTP $httpCode - " . substr($response, 0, 200);
@@ -266,6 +267,11 @@ class TenableSCAPI {
                 return $debugInfo;
             }
             
+            if (!isset($decoded['response'])) {
+                $debugInfo['error'] = 'Unexpected response structure. Response: ' . substr(json_encode($decoded), 0, 200);
+                return $debugInfo;
+            }
+            
             $debugInfo['success'] = true;
             $debugInfo['sample_response'] = [
                 'type' => $decoded['type'] ?? 'unknown',
@@ -275,7 +281,7 @@ class TenableSCAPI {
             ];
             
         } catch (Exception $e) {
-            $debugInfo['error'] = $e->getMessage();
+            $debugInfo['error'] = 'Exception: ' . $e->getMessage();
             $debugInfo['response_time_ms'] = round((microtime(true) - $startTime) * 1000, 2);
         }
         
@@ -291,8 +297,8 @@ class TenableSCAPI {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false); // Set to true in production with proper cert
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60); // Increased timeout for large responses
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
         
         $headers = [
@@ -409,21 +415,14 @@ class TenableSCAPI {
     
     /**
      * Get total asset instances for vulnerabilities of a specific severity
-     * Three-tier optimization approach:
-     * 1. FIRST TRY: Check if sumid returns a 'count' field directly (fastest)
-     * 2. SECOND TRY: Export all vulndetails and aggregate locally (recommended by Tenable)
-     * 3. FALLBACK: Query each plugin individually (slowest, ~100k+ requests)
-     * 
-     * @param int $endTime End timestamp for the analysis period
-     * @param string $severity Severity level (4=Critical, 3=High, 2=Medium, 1=Low)
-     * @return array ['asset_instances' => total, 'vuln_count' => count, 'method_used' => string]
+     * Three-tier optimization approach
      */
-    public function getVulnerabilityAssetInstances($endTime, $severity) {
+    public function getVulnerabilityAssetInstances($endTime, $severity, $progressCallback = null) {
         $queryFilters = [
             [
                 'filterName' => 'lastSeen',
                 'operator' => '>=',
-                'value' => ($endTime - (30 * 86400)) // Last 30 days
+                'value' => ($endTime - (30 * 86400))
             ],
             [
                 'filterName' => 'severity',
@@ -432,35 +431,34 @@ class TenableSCAPI {
             ]
         ];
         
-        // ATTEMPT 1: Try sumid to see if it provides count field directly
+        // ATTEMPT 1: Try sumid with count field
         error_log("VGI Calculation - Severity $severity: Attempting Method 1 (sumid with count field)");
+        if ($progressCallback) call_user_func($progressCallback, "Trying Method 1: sumid with count field (fastest)...");
         $sumidResult = $this->tryGetAssetInstancesFromSumid($queryFilters);
         if ($sumidResult !== false) {
             error_log("VGI Calculation - Severity $severity: SUCCESS with Method 1 (fastest!)");
             return array_merge($sumidResult, ['method_used' => 'sumid_count_field']);
         }
         
-        // ATTEMPT 2: Bulk export with vulndetails and local aggregation (Tenable recommended)
+        // ATTEMPT 2: Bulk export
         error_log("VGI Calculation - Severity $severity: Method 1 failed, attempting Method 2 (bulk export)");
-        $bulkResult = $this->tryGetAssetInstancesFromBulkExport($queryFilters);
+        if ($progressCallback) call_user_func($progressCallback, "Method 1 unavailable. Trying Method 2: bulk export (may take 30-60s)...");
+        $bulkResult = $this->tryGetAssetInstancesFromBulkExport($queryFilters, $progressCallback);
         if ($bulkResult !== false) {
             error_log("VGI Calculation - Severity $severity: SUCCESS with Method 2 (recommended)");
             return array_merge($bulkResult, ['method_used' => 'bulk_export']);
         }
         
-        // ATTEMPT 3: Fallback to individual plugin queries (slow but guaranteed)
+        // ATTEMPT 3: Individual queries
         error_log("VGI Calculation - Severity $severity: Method 2 failed, falling back to Method 3 (individual queries - SLOW)");
-        $individualResult = $this->getAssetInstancesFromIndividualQueries($queryFilters, $endTime);
-        error_log("VGI Calculation - Severity $severity: Completed with Method 3 (slowest method - consider optimization)");
+        if ($progressCallback) call_user_func($progressCallback, "Method 2 failed. Using Method 3: individual queries (VERY SLOW - may take several minutes)...");
+        $individualResult = $this->getAssetInstancesFromIndividualQueries($queryFilters, $endTime, $progressCallback);
+        error_log("VGI Calculation - Severity $severity: Completed with Method 3 (slowest method)");
         return array_merge($individualResult, ['method_used' => 'individual_queries']);
     }
     
     /**
-     * ATTEMPT 1: Try to get asset instances from sumid if it returns count field
-     * Tests first 10 records to see if 'count' field is available
-     * 
-     * @param array $queryFilters Filters for the query
-     * @return array|false Returns result array or false if method doesn't work
+     * ATTEMPT 1: Try sumid with count field
      */
     private function tryGetAssetInstancesFromSumid($queryFilters) {
         try {
@@ -475,7 +473,7 @@ class TenableSCAPI {
                 'sortField' => 'severity',
                 'sortDirection' => 'desc',
                 'startOffset' => 0,
-                'endOffset' => 10 // Just test with first 10 records
+                'endOffset' => 10
             ];
             
             $response = $this->makeRequest('/analysis', 'POST', $requestData);
@@ -486,11 +484,9 @@ class TenableSCAPI {
             
             $results = $response['response']['results'];
             if (empty($results)) {
-                // No vulnerabilities found for this severity
-                return ['asset_instances' => 0, 'vuln_count' => 0];
+                return ['asset_instances' => 0, 'vuln_count' => 0, 'api_calls' => 1];
             }
             
-            // Check if first result has a 'count' field
             $firstResult = $results[0];
             if (!isset($firstResult['count'])) {
                 error_log("VGI Test - sumid does NOT return 'count' field. Sample keys: " . implode(', ', array_keys($firstResult)));
@@ -499,15 +495,14 @@ class TenableSCAPI {
             
             error_log("VGI Test - sumid DOES return 'count' field! Proceeding with full sumid query.");
             
-            // Success! Now get all results with pagination
             $totalAssetInstances = 0;
             $totalVulnCount = 0;
             $offset = 0;
             $hasMore = true;
             
             while ($hasMore && $offset < self::MAX_VULNS_PER_SEVERITY) {
-                $requestData['query']['startOffset'] = $offset;
-                $requestData['query']['endOffset'] = $offset + self::PAGE_SIZE;
+                $requestData['startOffset'] = $offset;
+                $requestData['endOffset'] = $offset + self::PAGE_SIZE;
                 
                 $response = $this->makeRequest('/analysis', 'POST', $requestData);
                 
@@ -532,7 +527,8 @@ class TenableSCAPI {
             
             return [
                 'asset_instances' => $totalAssetInstances,
-                'vuln_count' => $totalVulnCount
+                'vuln_count' => $totalVulnCount,
+                'api_calls' => 1
             ];
             
         } catch (Exception $e) {
@@ -542,16 +538,10 @@ class TenableSCAPI {
     }
     
     /**
-     * ATTEMPT 2: Bulk export all vulnerabilities and aggregate locally
-     * This is the Tenable-recommended approach for large datasets
-     * Exports raw vulnerability data and counts unique IPs per plugin locally
-     * 
-     * @param array $queryFilters Filters for the query
-     * @return array|false Returns result array or false if method doesn't work
+     * ATTEMPT 2: Bulk export
      */
-    private function tryGetAssetInstancesFromBulkExport($queryFilters) {
+    private function tryGetAssetInstancesFromBulkExport($queryFilters, $progressCallback = null) {
         try {
-            // Use vulndetails tool for raw vulnerability data (Tenable recommended)
             $requestData = [
                 'type' => 'vuln',
                 'sourceType' => 'cumulative',
@@ -566,16 +556,18 @@ class TenableSCAPI {
                 'endOffset' => self::PAGE_SIZE
             ];
             
-            // Data structure: pluginID => [ip1 => true, ip2 => true, ...]
-            // Using IPs as keys provides automatic deduplication
             $vulnData = [];
             $offset = 0;
             $hasMore = true;
             $requestCount = 0;
             
             while ($hasMore && $requestCount < self::MAX_BULK_REQUESTS) {
-                $requestData['query']['startOffset'] = $offset;
-                $requestData['query']['endOffset'] = $offset + self::PAGE_SIZE;
+                $requestData['startOffset'] = $offset;
+                $requestData['endOffset'] = $offset + self::PAGE_SIZE;
+                
+                if ($progressCallback && $requestCount > 0) {
+                    call_user_func($progressCallback, "Bulk export: fetching page " . ($requestCount + 1) . " (offset: $offset)...");
+                }
                 
                 $response = $this->makeRequest('/analysis', 'POST', $requestData);
                 
@@ -585,231 +577,13 @@ class TenableSCAPI {
                 
                 $results = $response['response']['results'];
                 
-                // Aggregate locally: group by pluginID and collect unique IPs
                 foreach ($results as $finding) {
                     if (!isset($finding['pluginID']) || !isset($finding['ip'])) {
-                        continue; // Skip malformed records
+                        continue;
                     }
                     
                     $pluginID = $finding['pluginID'];
                     $ip = $finding['ip'];
                     
                     if (!isset($vulnData[$pluginID])) {
-                        $vulnData[$pluginID] = [];
-                    }
-                    
-                    // Using IP as array key automatically handles deduplication
-                    $vulnData[$pluginID][$ip] = true;
-                }
-                
-                $totalRecords = isset($response['response']['totalRecords']) 
-                    ? (int)$response['response']['totalRecords'] 
-                    : 0;
-                
-                $offset += self::PAGE_SIZE;
-                $hasMore = ($offset < $totalRecords) && (count($results) === self::PAGE_SIZE);
-                $requestCount++;
-            }
-            
-            // Calculate total asset instances by summing unique IPs per vulnerability
-            $totalAssetInstances = 0;
-            foreach ($vulnData as $pluginID => $ips) {
-                $totalAssetInstances += count($ips);
-            }
-            
-            $totalVulnCount = count($vulnData);
-            
-            error_log("VGI Bulk Export - Made $requestCount requests, found $totalVulnCount unique vulnerabilities, $totalAssetInstances asset instances");
-            
-            return [
-                'asset_instances' => $totalAssetInstances,
-                'vuln_count' => $totalVulnCount
-            ];
-            
-        } catch (Exception $e) {
-            error_log("VGI Test - bulk export method failed with error: " . $e->getMessage());
-            return false;
-        }
-    }
-    
-    /**
-     * ATTEMPT 3: Individual plugin queries (slowest fallback method)
-     * Only used when both optimized methods fail
-     * Makes one API call per vulnerability to get IP counts
-     * 
-     * @param array $queryFilters Filters for the query
-     * @param int $endTime End timestamp
-     * @return array Returns result array (never fails, but very slow with many CVEs)
-     */
-    private function getAssetInstancesFromIndividualQueries($queryFilters, $endTime) {
-        $totalAssetInstances = 0;
-        $totalVulnCount = 0;
-        $offset = 0;
-        $hasMore = true;
-        
-        // Get all unique vulnerabilities using sumid with pagination
-        while ($hasMore && $offset < self::MAX_VULNS_PER_SEVERITY) {
-            $requestData = [
-                'type' => 'vuln',
-                'sourceType' => 'cumulative',
-                'query' => [
-                    'tool' => 'sumid',
-                    'type' => 'vuln',
-                    'filters' => $queryFilters
-                ],
-                'sortField' => 'severity',
-                'sortDirection' => 'desc',
-                'startOffset' => $offset,
-                'endOffset' => $offset + self::PAGE_SIZE
-            ];
-            
-            $response = $this->makeRequest('/analysis', 'POST', $requestData);
-            
-            if (!isset($response['response']['results']) || !is_array($response['response']['results'])) {
-                break;
-            }
-            
-            $results = $response['response']['results'];
-            
-            // For each vulnerability, query for affected IPs individually (SLOW!)
-            foreach ($results as $vuln) {
-                if (isset($vuln['pluginID'])) {
-                    $ipCount = $this->getIPCountForPlugin($vuln['pluginID'], $endTime);
-                    $totalAssetInstances += $ipCount;
-                    
-                    // Add small delay to avoid rate limiting (10ms)
-                    usleep(10000);
-                }
-                
-                $totalVulnCount++;
-            }
-            
-            $totalRecords = isset($response['response']['totalRecords']) 
-                ? (int)$response['response']['totalRecords'] 
-                : 0;
-            
-            $offset += self::PAGE_SIZE;
-            $hasMore = ($offset < $totalRecords) && (count($results) === self::PAGE_SIZE);
-        }
-        
-        return [
-            'asset_instances' => $totalAssetInstances,
-            'vuln_count' => $totalVulnCount
-        ];
-    }
-    
-    /**
-     * Get the number of IPs affected by a specific plugin ID
-     * Used by the individual queries fallback method
-     * 
-     * @param string $pluginID The Nessus plugin ID
-     * @param int $endTime End timestamp for the analysis period
-     * @return int Number of affected IPs
-     */
-    private function getIPCountForPlugin($pluginID, $endTime) {
-        $queryFilters = [
-            [
-                'filterName' => 'pluginID',
-                'operator' => '=',
-                'value' => $pluginID
-            ],
-            [
-                'filterName' => 'lastSeen',
-                'operator' => '>=',
-                'value' => ($endTime - (30 * 86400))
-            ]
-        ];
-        
-        $requestData = [
-            'type' => 'vuln',
-            'sourceType' => 'cumulative',
-            'query' => [
-                'tool' => 'sumip', // Groups by IP address
-                'type' => 'vuln',
-                'filters' => $queryFilters
-            ],
-            'startOffset' => 0,
-            'endOffset' => 1 // We only need the totalRecords count
-        ];
-        
-        try {
-            $response = $this->makeRequest('/analysis', 'POST', $requestData);
-            
-            if (isset($response['response']['totalRecords'])) {
-                return (int)$response['response']['totalRecords'];
-            }
-        } catch (Exception $e) {
-            // If query fails, return 0
-            return 0;
-        }
-        
-        return 0;
-    }
-    
-    /**
-     * Get comprehensive vulnerability data with severity breakdown for a month
-     * Now includes optimized VGI calculation with automatic method selection
-     */
-    public function getMonthlyVulnerabilityData($startTime, $endTime) {
-        $severities = [
-            'critical' => self::SEVERITY_CRITICAL,
-            'high' => self::SEVERITY_HIGH,
-            'medium' => self::SEVERITY_MEDIUM,
-            'low' => self::SEVERITY_LOW
-        ];
-        
-        $data = [
-            'new' => [],
-            'closed' => [],
-            'current' => [],
-            'vgi_data' => [
-                'critical_asset_instances' => 0,
-                'high_asset_instances' => 0,
-                'medium_asset_instances' => 0,
-                'low_asset_instances' => 0
-            ],
-            'totals' => ['new' => 0, 'closed' => 0]
-        ];
-        
-        foreach ($severities as $name => $value) {
-            // Get new and closed counts for display
-            $newCount = $this->getNewVulnerabilitiesBySeverity($startTime, $endTime, $value);
-            $closedCount = $this->getClosedVulnerabilitiesBySeverity($startTime, $endTime, $value);
-            
-            // Get asset instances for VGI calculation (tries 3 methods automatically)
-            $vgiData = $this->getVulnerabilityAssetInstances($endTime, $value);
-            
-            $data['new'][$name] = $newCount;
-            $data['closed'][$name] = $closedCount;
-            $data['current'][$name] = [
-                'count' => $vgiData['vuln_count'],
-                'assets' => $vgiData['asset_instances'],
-                'method' => $vgiData['method_used'] // Track which method was used
-            ];
-            $data['vgi_data'][$name . '_asset_instances'] = $vgiData['asset_instances'];
-            
-            $data['totals']['new'] += $newCount;
-            $data['totals']['closed'] += $closedCount;
-        }
-        
-        return $data;
-    }
-}
-
-/**
- * Format timestamp to epoch time for Tenable SC API
- */
-function getMonthTimestamps($monthsAgo) {
-    $date = new DateTime();
-    $date->modify("-$monthsAgo months");
-    $date->modify('first day of this month');
-    $date->setTime(0, 0, 0);
-    $startTime = $date->getTimestamp();
-    
-    $date->modify('last day of this month');
-    $date->setTime(23, 59, 59);
-    $endTime = $date->getTimestamp();
-    
-    return [$startTime, $endTime];
-}
-?>
+                        $vulnData[$plug
