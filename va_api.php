@@ -278,7 +278,7 @@ class TenableSCAPI {
                         [
                             'filterName' => 'lastSeen',
                             'operator' => '=',
-                            'value' => $testEndTime . ':' . $testStartTime
+                            'value' => $testStartTime . ':' . $testEndTime
                         ]
                     ]
                 ],
@@ -423,7 +423,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'firstSeen',
                 'operator' => '=',
-                'value' => $endTime . ':' . $startTime
+                'value' => $startTime . ':' . $endTime
             ],
             [
                 'filterName' => 'severity',
@@ -501,7 +501,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'lastSeen',
                 'operator' => '=',
-                'value' => $endTime . ':' . $startTime
+                'value' => $startTime . ':' . $endTime
             ],
             [
                 'filterName' => 'severity',

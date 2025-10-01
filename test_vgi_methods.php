@@ -484,7 +484,7 @@ header('Content-Type: text/html; charset=utf-8');
                     [
                         'filterName' => 'lastSeen',
                         'operator' => '=',
-                        'value' => $endTime . ':' . $startTime
+                        'value' => $startTime . ':' . $endTime
                     ],
                     [
                         'filterName' => 'severity',
@@ -733,7 +733,7 @@ class VGIMethodTester {
                         [
                             'filterName' => 'lastSeen',
                             'operator' => '=',
-                            'value' => $testEndTime . ':' . $testStartTime
+                            'value' => $testStartTime . ':' . $testEndTime
                         ]
                     ]
                 ],

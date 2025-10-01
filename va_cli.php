@@ -78,7 +78,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'lastSeen',
                 'operator' => '=',
-                'value' => $endTime . ':' . $startTime
+                'value' => $startTime . ':' . $endTime
             ]
         ];
         

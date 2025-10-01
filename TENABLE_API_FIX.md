@@ -24,17 +24,18 @@ The code was using **incorrect filter formats** for time-based queries:
 
 ### ✅ **CORRECT Format (After Fix)**
 ```php
-// Using colon separator with reversed order (endTime:startTime)
+// Using colon separator with proper order (startTime:endTime)
 'operator' => '=',
-'value' => $endTime . ':' . $startTime
+'value' => $startTime . ':' . $endTime
 ```
 
 ## Key Changes
 
 According to Tenable SC API documentation, time range filters must use:
 - **Separator:** Colon (`:`) not hyphen (`-`)
-- **Order:** `endTime:startTime` (reversed, not startTime:endTime)
+- **Order:** `startTime:endTime` (start must be earlier/smaller than end)
 - **Operator:** `=` for range queries (not `>=` or `<=`)
+- **Important:** The "start" timestamp must be LESS THAN the "end" timestamp
 
 ## Files Fixed
 
@@ -67,7 +68,7 @@ Used for querying current/active vulnerabilities
 // AFTER
 'filterName' => 'lastSeen',
 'operator' => '=',
-'value' => $endTime . ':' . $startTime
+'value' => $startTime . ':' . $endTime
 ```
 
 ### `firstSeen` Filter
@@ -81,7 +82,7 @@ Used for querying new vulnerabilities
 // AFTER
 'filterName' => 'firstSeen',
 'operator' => '=',
-'value' => $endTime . ':' . $startTime
+'value' => $startTime . ':' . $endTime
 ```
 
 ### `lastMitigated` Filter
@@ -95,7 +96,7 @@ Used for querying closed/patched vulnerabilities
 // AFTER
 'filterName' => 'lastMitigated',
 'operator' => '=',
-'value' => $endTime . ':' . $startTime
+'value' => $startTime . ':' . $endTime
 ```
 
 ## Testing
