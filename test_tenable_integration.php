@@ -11,6 +11,11 @@
  * 5. Performance metrics for each method
  */
 
+// Configure PHP for real-time output (must be before any output)
+@ini_set('output_buffering', 'off');
+@ini_set('zlib.output_compression', 'off');
+@ini_set('implicit_flush', '1');
+
 // Prevent timeout for long-running tests
 set_time_limit(300); // 5 minutes max
 
@@ -417,11 +422,6 @@ header('Content-Type: text/html; charset=utf-8');
                 while (ob_get_level()) {
                     ob_end_flush();
                 }
-                
-                // Configure PHP for real-time output
-                ini_set('output_buffering', 'off');
-                ini_set('zlib.output_compression', 'off');
-                ini_set('implicit_flush', '1');
                 
                 // Disable Apache/nginx output buffering
                 if (function_exists('apache_setenv')) {

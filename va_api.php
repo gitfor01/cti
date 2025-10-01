@@ -586,4 +586,44 @@ class TenableSCAPI {
                     $ip = $finding['ip'];
                     
                     if (!isset($vulnData[$pluginID])) {
-                        $vulnData[$plug
+                        $vulnData[$pluginID] = ['ips' => []];
+                    }
+                    
+                    if (!in_array($ip, $vulnData[$pluginID]['ips'])) {
+                        $vulnData[$pluginID]['ips'][] = $ip;
+                    }
+                }
+                
+                $offset += self::PAGE_SIZE;
+                $requestCount++;
+                
+                if (count($results) < self::PAGE_SIZE) {
+                    $hasMore = false;
+                }
+                
+                if (count($vulnData) >= self::MAX_VULNS_PER_SEVERITY) {
+                    error_log("VGI Test - Bulk export reached max vulns limit: " . self::MAX_VULNS_PER_SEVERITY);
+                    break;
+                }
+            }
+            
+            $totalAssetInstances = 0;
+            foreach ($vulnData as $pluginID => $data) {
+                $totalAssetInstances += count($data['ips']);
+            }
+            
+            error_log("VGI Test - Bulk export found $totalAssetInstances asset instances from " . count($vulnData) . " unique vulnerabilities");
+            
+            return [
+                'asset_instances' => $totalAssetInstances,
+                'vuln_count' => count($vulnData),
+                'api_calls' => $requestCount
+            ];
+            
+        } catch (Exception $e) {
+            error_log("VGI Test - Bulk export failed: " . $e->getMessage());
+            return false;
+        }
+    }
+}
+?>
