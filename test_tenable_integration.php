@@ -431,9 +431,24 @@ header('Content-Type: text/html; charset=utf-8');
             
             <div class="test-results" id="results">
                 <?php
-                // Enable output buffering with immediate flush
-                if (ob_get_level()) ob_end_flush();
-                ob_implicit_flush(true);
+                // Disable all output buffering for real-time updates
+                while (ob_get_level()) {
+                    ob_end_flush();
+                }
+                
+                // Configure PHP for real-time output
+                ini_set('output_buffering', 'off');
+                ini_set('zlib.output_compression', 'off');
+                ini_set('implicit_flush', '1');
+                
+                // Disable Apache/nginx output buffering
+                if (function_exists('apache_setenv')) {
+                    apache_setenv('no-gzip', '1');
+                }
+                
+                // Send initial padding to overcome browser buffering (4KB minimum)
+                echo str_pad('', 4096) . "\n";
+                flush();
                 
                 // Run the actual tests
                 $scHost = $_POST['scHost'];
@@ -454,6 +469,19 @@ header('Content-Type: text/html; charset=utf-8');
 <?php
 
 /**
+ * Force output to browser immediately
+ * Adds padding to overcome browser buffering thresholds
+ */
+function forceFlush() {
+    // Add 1KB of padding to ensure browser displays content immediately
+    echo str_repeat(' ', 1024);
+    if (ob_get_level() > 0) {
+        ob_flush();
+    }
+    flush();
+}
+
+/**
  * Show progress indicator
  */
 function showProgress($message) {
@@ -461,8 +489,7 @@ function showProgress($message) {
     echo '<div class="spinner-small"></div>';
     echo '<span>' . htmlspecialchars($message) . '</span>';
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
 }
 
 /**
@@ -470,13 +497,14 @@ function showProgress($message) {
  */
 function clearProgress() {
     echo '<script>
-        var progressIndicators = document.querySelectorAll(".progress-indicator");
-        if (progressIndicators.length > 0) {
-            progressIndicators[progressIndicators.length - 1].remove();
-        }
+        (function() {
+            var progressIndicators = document.querySelectorAll(".progress-indicator");
+            if (progressIndicators.length > 0) {
+                progressIndicators[progressIndicators.length - 1].remove();
+            }
+        })();
     </script>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
 }
 
 /**
@@ -491,45 +519,72 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     echo '<button onclick="window.location.href=window.location.href.split(\'?\')[0];" class="stop-test-btn">⏹ Stop Test & Return</button>';
     echo '<p style="color: #666; margin-top: 10px;">You can stop the test at any time using the button above</p>';
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     echo '<div class="test-section">';
     echo '<h3>🔌 Test 1: Connection & Authentication</h3>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     try {
         showProgress('Connecting to Tenable Security Center...');
         require_once 'va_api.php';
         $api = new TenableSCAPI($scHost, $accessKey, $secretKey);
-        
-        showProgress('Testing authentication with API keys...');
-        // Test basic connection with a simple query
-        $testEndTime = time();
-        $testStartTime = $testEndTime - (30 * 86400); // Last 30 days
-        
-        $testResult = $api->getNewVulnerabilitiesBySeverity($testStartTime, $testEndTime, '4');
         clearProgress();
         
-        echo '<div class="test-item success">';
-        echo '<div class="status"><span class="badge success">✓ PASSED</span> Connection Successful</div>';
-        echo '<div class="details">Successfully connected to Tenable SC and authenticated with API keys.</div>';
-        echo '</div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        showProgress('Testing authentication with API keys...');
+        // Test connection and get detailed debug information
+        $connectionDebug = $api->testConnection();
+        clearProgress();
         
-        $results['connection'] = true;
+        if ($connectionDebug['success']) {
+            echo '<div class="test-item success">';
+            echo '<div class="status"><span class="badge success">✓ PASSED</span> Connection Successful</div>';
+            echo '<div class="details">';
+            echo '<strong>Connection Details:</strong><br>';
+            echo '• Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
+            echo '• Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
+            echo '• HTTP Status: ' . $connectionDebug['http_code'] . ' OK<br>';
+            echo '• Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
+            echo '<br><strong>API Response:</strong><br>';
+            echo '• Response Type: ' . htmlspecialchars($connectionDebug['sample_response']['response_type']) . '<br>';
+            echo '• Total Records Found: ' . $connectionDebug['sample_response']['total_records'] . '<br>';
+            echo '• Has Results: ' . ($connectionDebug['sample_response']['has_results'] ? 'Yes' : 'No') . '<br>';
+            echo '</div>';
+            echo '</div>';
+            forceFlush();
+            
+            $results['connection'] = true;
+        } else {
+            throw new Exception($connectionDebug['error'] ?? 'Unknown connection error');
+        }
         
     } catch (Exception $e) {
         clearProgress();
         echo '<div class="test-item error">';
         echo '<div class="status"><span class="badge error">✗ FAILED</span> Connection Failed</div>';
-        echo '<div class="details">Error: ' . htmlspecialchars($e->getMessage()) . '</div>';
+        echo '<div class="details">';
+        echo '<strong>Error:</strong> ' . htmlspecialchars($e->getMessage()) . '<br>';
+        
+        // Show debug info if available
+        if (isset($connectionDebug)) {
+            echo '<br><strong>Debug Information:</strong><br>';
+            echo '• Host: ' . htmlspecialchars($connectionDebug['host']) . '<br>';
+            echo '• Endpoint: ' . htmlspecialchars($connectionDebug['endpoint']) . '<br>';
+            if ($connectionDebug['http_code']) {
+                echo '• HTTP Status: ' . $connectionDebug['http_code'] . '<br>';
+            }
+            if ($connectionDebug['response_time_ms'] > 0) {
+                echo '• Response Time: ' . $connectionDebug['response_time_ms'] . ' ms<br>';
+            }
+            if ($connectionDebug['sample_response']) {
+                echo '• Sample Response: ' . htmlspecialchars(substr(print_r($connectionDebug['sample_response'], true), 0, 200)) . '<br>';
+            }
+        }
+        
         echo '</div>';
         echo '</div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        echo '</div>';
+        forceFlush();
         
         $results['connection'] = false;
         
@@ -539,14 +594,12 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     }
     
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     // Test 2: Vulnerability Queries
     echo '<div class="test-section">';
     echo '<h3>📊 Test 2: Vulnerability Data Queries</h3>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     $endTime = time();
     $startTime = $endTime - (30 * 86400); // Last 30 days
@@ -580,8 +633,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             echo 'Net change: <strong>' . ($newCount - $closedCount) . '</strong>';
             echo '</div>';
             echo '</div>';
-            flush();
-            if (ob_get_level() > 0) ob_flush();
+            forceFlush();
             
             $vulnData[$sevCode] = [
                 'name' => $sevName,
@@ -597,31 +649,27 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             echo '<div class="status"><span class="badge error">✗ FAILED</span> ' . $sevName . ' Severity Queries</div>';
             echo '<div class="details">Error: ' . htmlspecialchars($e->getMessage()) . '</div>';
             echo '</div>';
-            flush();
-            if (ob_get_level() > 0) ob_flush();
+            forceFlush();
             
             $results['vuln_queries_' . $sevCode] = false;
         }
     }
     
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     // Test 3: VGI Optimization Methods
     echo '<div class="test-section">';
     echo '<h3>⚡ Test 3: VGI Calculation Optimization Methods</h3>';
     echo '<p style="margin-bottom: 15px; color: #666;">Testing all three optimization approaches to determine which works best in your environment.</p>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     $optimizationResults = [];
     
     foreach ($severities as $sevCode => $sevName) {
         echo '<div class="test-item info">';
         echo '<div class="status"><strong>' . $sevName . ' Severity - Asset Instance Calculation</strong></div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        forceFlush();
         
         try {
             showProgress("Calculating {$sevName} severity asset instances (testing optimization methods)...");
@@ -656,8 +704,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             echo 'Execution time: <strong>' . round($methodDuration, 2) . 's</strong><br>';
             echo 'Average instances per vulnerability: <strong>' . ($vulnCount > 0 ? round($assetInstances / $vulnCount, 2) : 0) . '</strong>';
             echo '</div>';
-            flush();
-            if (ob_get_level() > 0) ob_flush();
+            forceFlush();
             
             $optimizationResults[$sevCode] = [
                 'severity' => $sevName,
@@ -677,8 +724,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             echo '<span class="badge error">ERROR</span><br><br>';
             echo 'Error: ' . htmlspecialchars($e->getMessage());
             echo '</div>';
-            flush();
-            if (ob_get_level() > 0) ob_flush();
+            forceFlush();
             
             $optimizationResults[$sevCode] = [
                 'severity' => $sevName,
@@ -690,8 +736,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         }
         
         echo '</div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        forceFlush();
         
         // For quick test, only test one severity
         if ($testDepth === 'quick') {
@@ -700,8 +745,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
     }
     
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     // Test 4: Performance Analysis
     if (!empty($optimizationResults)) {
@@ -709,8 +753,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         echo '<div class="test-section">';
         echo '<h3>📈 Test 4: Performance Analysis</h3>';
         clearProgress();
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        forceFlush();
         
         echo '<table class="performance-table">';
         echo '<thead><tr>';
@@ -777,8 +820,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         echo '</div>';
         
         echo '</div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        forceFlush();
         
         // Show recommendations
         showProgress('Generating recommendations...');
@@ -812,8 +854,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
         
         echo '</ul>';
         echo '</div>';
-        flush();
-        if (ob_get_level() > 0) ob_flush();
+        forceFlush();
     }
     
     // Show final summary
@@ -834,8 +875,7 @@ function showFinalSummary($results, $totalDuration) {
     
     echo '<div class="test-section" style="border-left-color: ' . ($failed === 0 ? '#28a745' : '#ffc107') . ';">';
     echo '<h3>📊 Final Test Summary</h3>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     echo '<div class="summary-grid">';
     
@@ -860,8 +900,7 @@ function showFinalSummary($results, $totalDuration) {
     echo '</div>';
     
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     if ($failed === 0) {
         echo '<div class="test-item success" style="margin-top: 20px;">';
@@ -891,8 +930,7 @@ function showFinalSummary($results, $totalDuration) {
     }
     
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
     
     // Add button to run test again or go back
     echo '<div style="margin-top: 30px; text-align: center;">';
@@ -901,8 +939,7 @@ function showFinalSummary($results, $totalDuration) {
     echo '</form>';
     echo '<a href="index.php" class="btn" style="display: inline-block; width: auto; padding: 12px 30px; text-decoration: none;">← Back to Dashboard</a>';
     echo '</div>';
-    flush();
-    if (ob_get_level() > 0) ob_flush();
+    forceFlush();
 }
 
 ?>

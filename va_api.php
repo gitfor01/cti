@@ -180,6 +180,109 @@ class TenableSCAPI {
     }
     
     /**
+     * Test connection and return detailed debug information
+     * @return array Connection details including response time, HTTP code, and sample data
+     */
+    public function testConnection() {
+        $startTime = microtime(true);
+        $debugInfo = [
+            'host' => $this->host,
+            'endpoint' => '/rest/analysis',
+            'success' => false,
+            'http_code' => null,
+            'response_time_ms' => 0,
+            'error' => null,
+            'sample_response' => null
+        ];
+        
+        try {
+            // Make a simple test query
+            $testEndTime = time();
+            $testStartTime = $testEndTime - (30 * 86400); // Last 30 days
+            
+            $requestData = [
+                'type' => 'vuln',
+                'sourceType' => 'cumulative',
+                'query' => [
+                    'tool' => 'listvuln',
+                    'type' => 'vuln',
+                    'filters' => [
+                        [
+                            'filterName' => 'firstSeen',
+                            'operator' => '=',
+                            'value' => $testStartTime . '-' . $testEndTime
+                        ],
+                        [
+                            'filterName' => 'severity',
+                            'operator' => '=',
+                            'value' => '4'
+                        ]
+                    ]
+                ],
+                'startOffset' => 0,
+                'endOffset' => 1
+            ];
+            
+            $url = $this->host . '/rest/analysis';
+            
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+            
+            $headers = [
+                'x-apikey: accesskey=' . $this->accessKey . '; secretkey=' . $this->secretKey . ';',
+                'Content-Type: application/json'
+            ];
+            curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($requestData));
+            
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $debugInfo['http_code'] = $httpCode;
+            
+            if (curl_errno($ch)) {
+                $debugInfo['error'] = 'cURL Error: ' . curl_error($ch);
+                curl_close($ch);
+                return $debugInfo;
+            }
+            
+            curl_close($ch);
+            
+            $debugInfo['response_time_ms'] = round((microtime(true) - $startTime) * 1000, 2);
+            
+            if ($httpCode !== 200) {
+                $debugInfo['error'] = "HTTP $httpCode - " . substr($response, 0, 200);
+                return $debugInfo;
+            }
+            
+            $decoded = json_decode($response, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $debugInfo['error'] = 'Invalid JSON response: ' . json_last_error_msg();
+                $debugInfo['sample_response'] = substr($response, 0, 200);
+                return $debugInfo;
+            }
+            
+            $debugInfo['success'] = true;
+            $debugInfo['sample_response'] = [
+                'type' => $decoded['type'] ?? 'unknown',
+                'response_type' => $decoded['response']['type'] ?? 'unknown',
+                'total_records' => $decoded['response']['totalRecords'] ?? 0,
+                'has_results' => isset($decoded['response']['results'])
+            ];
+            
+        } catch (Exception $e) {
+            $debugInfo['error'] = $e->getMessage();
+            $debugInfo['response_time_ms'] = round((microtime(true) - $startTime) * 1000, 2);
+        }
+        
+        return $debugInfo;
+    }
+    
+    /**
      * Make API request to Tenable SC
      */
     private function makeRequest($endpoint, $method = 'GET', $data = null) {
