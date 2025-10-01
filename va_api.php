@@ -264,9 +264,9 @@ class TenableSCAPI {
         ];
         
         try {
-            // Use a VERY lightweight query - just check last 24 hours, limit 1
+            // Use a VERY lightweight query - just check last 30 days with proper format
             $testEndTime = time();
-            $testStartTime = $testEndTime - 86400; // Only last 24 hours
+            $testStartTime = $testEndTime - (30 * 86400); // Last 30 days
             
             $requestData = [
                 'type' => 'vuln',
@@ -277,8 +277,8 @@ class TenableSCAPI {
                     'filters' => [
                         [
                             'filterName' => 'lastSeen',
-                            'operator' => '>=',
-                            'value' => (string)$testStartTime
+                            'operator' => '=',
+                            'value' => $testEndTime . ':' . $testStartTime
                         ]
                     ]
                 ],
@@ -423,7 +423,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'firstSeen',
                 'operator' => '=',
-                'value' => $startTime . '-' . $endTime
+                'value' => $endTime . ':' . $startTime
             ],
             [
                 'filterName' => 'severity',
@@ -461,7 +461,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'lastMitigated',
                 'operator' => '=',
-                'value' => $startTime . '-' . $endTime
+                'value' => $endTime . ':' . $startTime
             ],
             [
                 'filterName' => 'severity',
@@ -496,11 +496,12 @@ class TenableSCAPI {
      * Three-tier optimization approach
      */
     public function getVulnerabilityAssetInstances($endTime, $severity, $progressCallback = null) {
+        $startTime = $endTime - (30 * 86400);
         $queryFilters = [
             [
                 'filterName' => 'lastSeen',
-                'operator' => '>=',
-                'value' => ($endTime - (30 * 86400))
+                'operator' => '=',
+                'value' => $endTime . ':' . $startTime
             ],
             [
                 'filterName' => 'severity',

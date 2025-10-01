@@ -483,8 +483,8 @@ header('Content-Type: text/html; charset=utf-8');
                 $queryFilters = [
                     [
                         'filterName' => 'lastSeen',
-                        'operator' => '>=',
-                        'value' => (string)$startTime
+                        'operator' => '=',
+                        'value' => $endTime . ':' . $startTime
                     ],
                     [
                         'filterName' => 'severity',
@@ -721,7 +721,7 @@ class VGIMethodTester {
         
         try {
             $testEndTime = time();
-            $testStartTime = $testEndTime - 86400;
+            $testStartTime = $testEndTime - (30 * 86400); // Last 30 days
             
             $requestData = [
                 'type' => 'vuln',
@@ -732,8 +732,8 @@ class VGIMethodTester {
                     'filters' => [
                         [
                             'filterName' => 'lastSeen',
-                            'operator' => '>=',
-                            'value' => (string)$testStartTime
+                            'operator' => '=',
+                            'value' => $testEndTime . ':' . $testStartTime
                         ]
                     ]
                 ],
