@@ -708,7 +708,7 @@ function runIntegrationTests($scHost, $accessKey, $secretKey, $testDepth) {
             $methodDuration = microtime(true) - $methodStartTime;
             clearProgress();
             
-            $method = $result['method_used'] ?? 'unknown';
+            $method = $result['method'] ?? 'unknown';
             $assetInstances = $result['asset_instances'] ?? 0;
             $vulnCount = $result['vuln_count'] ?? 0;
             $apiCalls = $result['api_calls'] ?? 0;
