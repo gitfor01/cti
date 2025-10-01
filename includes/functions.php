@@ -104,16 +104,27 @@ function getFindingById($pdo, $id) {
  * @param string $username Username of the new user
  * @param string $password Plain text password; will be hashed
  * @param string $role     User role ('admin' or 'user')
- * @return bool            True on success, false on failure
+ * @return array           Array with 'success' (bool) and 'error' (string) keys
  */
 function addUser($pdo, $username, $password, $role = 'user') {
+    // Validate password strength
+    $validation = validatePassword($password);
+    if (!$validation['valid']) {
+        return ['success' => false, 'error' => $validation['error']];
+    }
+    
     $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
     $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (:username, :password, :role)");
-    return $stmt->execute([
+    $success = $stmt->execute([
         ':username' => $username,
         ':password' => $hashedPassword,
         ':role' => $role
     ]);
+    
+    return [
+        'success' => $success,
+        'error' => $success ? '' : 'Failed to create user'
+    ];
 }
 
 /**
@@ -137,6 +148,128 @@ function getAllUsers($pdo) {
 function deleteUser($pdo, $id) {
     $stmt = $pdo->prepare("DELETE FROM users WHERE id = :id");
     return $stmt->execute([':id' => $id]);
+}
+
+/**
+ * Validate password strength.
+ * Password must be at least 7 characters and contain:
+ * - At least one uppercase letter
+ * - At least one lowercase letter
+ * - At least one number
+ * - At least one symbol/special character
+ *
+ * @param string $password Password to validate
+ * @return array Array with 'valid' (bool) and 'error' (string) keys
+ */
+function validatePassword($password) {
+    $errors = [];
+    
+    if (strlen($password) < 7) {
+        $errors[] = 'Password must be at least 7 characters long';
+    }
+    
+    if (!preg_match('/[A-Z]/', $password)) {
+        $errors[] = 'Password must contain at least one uppercase letter';
+    }
+    
+    if (!preg_match('/[a-z]/', $password)) {
+        $errors[] = 'Password must contain at least one lowercase letter';
+    }
+    
+    if (!preg_match('/[0-9]/', $password)) {
+        $errors[] = 'Password must contain at least one number';
+    }
+    
+    if (!preg_match('/[^A-Za-z0-9]/', $password)) {
+        $errors[] = 'Password must contain at least one symbol/special character';
+    }
+    
+    return [
+        'valid' => empty($errors),
+        'error' => empty($errors) ? '' : implode('. ', $errors)
+    ];
+}
+
+/**
+ * Change a user's password (for user changing their own password).
+ *
+ * @param PDO    $pdo            Database connection
+ * @param int    $userId         User ID
+ * @param string $currentPassword Current password (for verification)
+ * @param string $newPassword    New password
+ * @return array                 Array with 'success' (bool) and 'error' (string) keys
+ */
+function changeUserPassword($pdo, $userId, $currentPassword, $newPassword) {
+    // Validate new password strength
+    $validation = validatePassword($newPassword);
+    if (!$validation['valid']) {
+        return ['success' => false, 'error' => $validation['error']];
+    }
+    
+    // Verify current password
+    $stmt = $pdo->prepare('SELECT password FROM users WHERE id = :id');
+    $stmt->execute([':id' => $userId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+        return ['success' => false, 'error' => 'User not found'];
+    }
+    
+    if (!password_verify($currentPassword, $user['password'])) {
+        return ['success' => false, 'error' => 'Current password is incorrect'];
+    }
+    
+    // Update password
+    $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE users SET password = :password WHERE id = :id');
+    $success = $stmt->execute([
+        ':password' => $hashedPassword,
+        ':id' => $userId
+    ]);
+    
+    return [
+        'success' => $success,
+        'error' => $success ? '' : 'Failed to update password'
+    ];
+}
+
+/**
+ * Change another user's password (admin function).
+ * Admin does not need to know the current password.
+ *
+ * @param PDO    $pdo         Database connection
+ * @param int    $targetUserId User ID whose password will be changed
+ * @param string $newPassword New password
+ * @return array              Array with 'success' (bool) and 'error' (string) keys
+ */
+function adminChangeUserPassword($pdo, $targetUserId, $newPassword) {
+    // Validate new password strength
+    $validation = validatePassword($newPassword);
+    if (!$validation['valid']) {
+        return ['success' => false, 'error' => $validation['error']];
+    }
+    
+    // Check if user exists
+    $stmt = $pdo->prepare('SELECT id FROM users WHERE id = :id');
+    $stmt->execute([':id' => $targetUserId]);
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$user) {
+        return ['success' => false, 'error' => 'User not found'];
+    }
+    
+    // Update password
+    $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+    $stmt = $pdo->prepare('UPDATE users SET password = :password WHERE id = :id');
+    $success = $stmt->execute([
+        ':password' => $hashedPassword,
+        ':id' => $targetUserId
+    ]);
+    
+    return [
+        'success' => $success,
+        'error' => $success ? '' : 'Failed to update password'
+    ];
 }
 
 /**

@@ -1,10 +1,10 @@
 <?php
 /**
- * VA Dashboard - Tenable Security Center Vulnerability Analysis
- * Shows monthly net change in vulnerabilities with interactive bar chart
+ * VA Dashboard - Bar Chart Version
+ * Shows monthly net change in vulnerabilities as a bar chart
  */
 
-$pageTitle = 'VA Dashboard - Vulnerability Analysis';
+$pageTitle = 'VA Dashboard - Bar Chart View';
 require_once 'includes/header.php';
 require_once 'includes/config.php';
 
@@ -206,218 +206,6 @@ if (!isset($_SESSION['user_id'])) {
         width: 3rem;
         height: 3rem;
     }
-
-    /* Progress Tracker Styles */
-    .progress-tracker {
-        display: none;
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 20px;
-        padding: 40px;
-        margin-top: 30px;
-        color: #2d3748;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    }
-
-    .progress-header {
-        text-align: center;
-        margin-bottom: 30px;
-    }
-
-    .progress-title {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #2d3748;
-        margin-bottom: 10px;
-    }
-
-    .progress-subtitle {
-        font-size: 1rem;
-        color: #718096;
-    }
-
-    .progress-bar-container {
-        background: #e2e8f0;
-        border-radius: 50px;
-        height: 40px;
-        overflow: hidden;
-        margin-bottom: 20px;
-        position: relative;
-        box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
-    }
-
-    .progress-bar-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        border-radius: 50px;
-        transition: width 0.5s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-weight: 700;
-        font-size: 14px;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .progress-bar-fill::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-        animation: shimmer 2s infinite;
-    }
-
-    @keyframes shimmer {
-        0% { left: -100%; }
-        100% { left: 100%; }
-    }
-
-    .progress-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        margin-top: 30px;
-    }
-
-    .progress-stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-    }
-
-    .progress-stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-
-    .progress-stat-label {
-        font-size: 0.85rem;
-        opacity: 0.9;
-    }
-
-    .progress-current-task {
-        background: rgba(59, 130, 246, 0.1);
-        border-left: 4px solid #3b82f6;
-        padding: 15px 20px;
-        border-radius: 8px;
-        margin: 20px 0;
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .progress-current-task .spinner-border {
-        width: 1.5rem;
-        height: 1.5rem;
-    }
-
-    .progress-task-text {
-        flex: 1;
-        font-weight: 600;
-        color: #1e40af;
-    }
-
-    .progress-timeline {
-        margin-top: 30px;
-        padding: 20px;
-        background: #f7fafc;
-        border-radius: 15px;
-    }
-
-    .progress-timeline-item {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        padding: 10px 0;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    .progress-timeline-item:last-child {
-        border-bottom: none;
-    }
-
-    .progress-timeline-icon {
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        flex-shrink: 0;
-    }
-
-    .progress-timeline-icon.completed {
-        background: #68d391;
-        color: white;
-    }
-
-    .progress-timeline-icon.active {
-        background: #667eea;
-        color: white;
-        animation: pulse 2s infinite;
-    }
-
-    .progress-timeline-icon.pending {
-        background: #e2e8f0;
-        color: #a0aec0;
-    }
-
-    @keyframes pulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-    }
-
-    .progress-timeline-content {
-        flex: 1;
-    }
-
-    .progress-timeline-title {
-        font-weight: 600;
-        color: #2d3748;
-        margin-bottom: 2px;
-    }
-
-    .progress-timeline-subtitle {
-        font-size: 0.85rem;
-        color: #718096;
-    }
-
-    .progress-timeline-time {
-        font-size: 0.85rem;
-        color: #a0aec0;
-        font-weight: 600;
-        min-width: 80px;
-        text-align: right;
-    }
-
-    .time-estimate-card {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        padding: 25px;
-        border-radius: 15px;
-        margin-top: 20px;
-        text-align: center;
-    }
-
-    .time-estimate-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 5px;
-    }
-
-    .time-estimate-label {
-        font-size: 1rem;
-        opacity: 0.9;
-    }
     
     .alert {
         border-radius: 10px;
@@ -499,9 +287,9 @@ if (!isset($_SESSION['user_id'])) {
 <div class="va-dashboard">
     <div class="dashboard-header">
         <h1 class="dashboard-title">
-            <i class="fas fa-chart-bar"></i> VA Dashboard
+            <i class="fas fa-chart-bar"></i> VA Dashboard - Bar Chart View
         </h1>
-        <p class="dashboard-subtitle">Monthly Vulnerability Analysis with VGI Tracking</p>
+        <p class="dashboard-subtitle">Monthly Net Change in Vulnerabilities</p>
     </div>
     
     <div class="config-section">
@@ -548,52 +336,6 @@ if (!isset($_SESSION['user_id'])) {
         <span class="visually-hidden">Loading...</span>
     </div>
     <p class="mt-3">Analyzing vulnerability data...</p>
-</div>
-
-<div class="progress-tracker" id="progressTracker">
-    <div class="progress-header">
-        <h2 class="progress-title">
-            <i class="fas fa-sync-alt fa-spin"></i> Syncing with Tenable Security Center
-        </h2>
-        <p class="progress-subtitle">Please wait while we retrieve and analyze vulnerability data...</p>
-    </div>
-
-    <div class="progress-bar-container">
-        <div class="progress-bar-fill" id="progressBarFill" style="width: 0%;">
-            <span id="progressPercentage">0%</span>
-        </div>
-    </div>
-
-    <div class="progress-current-task" id="currentTask">
-        <div class="spinner-border text-primary" role="status"></div>
-        <div class="progress-task-text" id="currentTaskText">Initializing connection...</div>
-    </div>
-
-    <div class="progress-stats">
-        <div class="progress-stat-card">
-            <div class="progress-stat-value" id="progressMonthsCompleted">0</div>
-            <div class="progress-stat-label">Months Completed</div>
-        </div>
-        <div class="progress-stat-card">
-            <div class="progress-stat-value" id="progressMonthsTotal">0</div>
-            <div class="progress-stat-label">Total Months</div>
-        </div>
-        <div class="progress-stat-card">
-            <div class="progress-stat-value" id="progressElapsedTime">0s</div>
-            <div class="progress-stat-label">Elapsed Time</div>
-        </div>
-        <div class="time-estimate-card">
-            <div class="time-estimate-value" id="progressEstimatedTime">Calculating...</div>
-            <div class="time-estimate-label">Estimated Time Remaining</div>
-        </div>
-    </div>
-
-    <div class="progress-timeline" id="progressTimeline">
-        <h4 style="margin-bottom: 20px; color: #2d3748; font-weight: 700;">
-            <i class="fas fa-tasks"></i> Processing Timeline
-        </h4>
-        <!-- Timeline items will be dynamically added here -->
-    </div>
 </div>
 
 <div class="visualization-container" id="visualizationContainer" style="display: none;">
@@ -646,9 +388,17 @@ if (!isset($_SESSION['user_id'])) {
             <div class="stat-value" id="totalClosed">0</div>
             <div class="stat-label">Total Closed Vulnerabilities</div>
         </div>
+        <div class="stat-card">
+            <div class="stat-value" id="netChange">0</div>
+            <div class="stat-label">Net Change</div>
+        </div>
         <div class="stat-card vgi-card">
             <div class="stat-value" id="currentVGI">0</div>
             <div class="stat-label">Current VGI</div>
+        </div>
+        <div class="stat-card vgi-card">
+            <div class="stat-value" id="avgVGIChange">0</div>
+            <div class="stat-label">Avg VGI Change</div>
         </div>
     </div>
     
@@ -675,10 +425,6 @@ if (!isset($_SESSION['user_id'])) {
 let vulnerabilityData = [];
 let canvas, ctx, tooltip;
 let barData = [];
-let progressStartTime = null;
-let progressInterval = null;
-let monthsToProcess = 0;
-let monthsCompleted = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
     canvas = document.getElementById('barChart');
@@ -709,29 +455,12 @@ async function handleFormSubmit(e) {
         monthsToAnalyze: parseInt(document.getElementById('monthsToAnalyze').value)
     };
     
-    // Initialize progress tracking
-    monthsToProcess = formData.monthsToAnalyze;
-    monthsCompleted = 0;
-    progressStartTime = Date.now();
-    
-    // Show progress tracker
-    document.getElementById('loadingSpinner').style.display = 'none';
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
     document.getElementById('visualizationContainer').style.display = 'none';
-    document.getElementById('progressTracker').style.display = 'block';
     clearAlerts();
     
-    // Initialize progress display
-    document.getElementById('progressMonthsTotal').textContent = monthsToProcess;
-    document.getElementById('progressMonthsCompleted').textContent = '0';
-    initializeTimeline(monthsToProcess);
-    
-    // Start elapsed time counter
-    startProgressTimer();
-    
     try {
-        // Simulate progress updates (since we can't get real-time updates from PHP)
-        simulateProgress(formData.monthsToAnalyze);
-        
         const response = await fetch('va_api.php', {
             method: 'POST',
             headers: {
@@ -742,175 +471,16 @@ async function handleFormSubmit(e) {
         
         const result = await response.json();
         
-        // Stop progress timer
-        stopProgressTimer();
-        
         if (result.success) {
-            // Complete progress
-            updateProgress(100, 'Analysis complete!', monthsToProcess);
-            
-            // Wait a moment to show completion
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
             vulnerabilityData = result.data;
-            document.getElementById('progressTracker').style.display = 'none';
             displayResults();
         } else {
-            document.getElementById('progressTracker').style.display = 'none';
             showAlert('danger', 'Error: ' + result.message);
         }
     } catch (error) {
-        stopProgressTimer();
-        document.getElementById('progressTracker').style.display = 'none';
         showAlert('danger', 'Network error: ' + error.message);
-    }
-}
-
-function initializeTimeline(totalMonths) {
-    const timeline = document.getElementById('progressTimeline');
-    const timelineContent = timeline.querySelector('h4').nextSibling;
-    
-    // Clear existing timeline items (except the header)
-    while (timeline.children.length > 1) {
-        timeline.removeChild(timeline.lastChild);
-    }
-    
-    // Add timeline items for each month
-    for (let i = 0; i < totalMonths; i++) {
-        const item = document.createElement('div');
-        item.className = 'progress-timeline-item';
-        item.id = `timeline-month-${i}`;
-        item.innerHTML = `
-            <div class="progress-timeline-icon pending" id="timeline-icon-${i}">
-                <i class="fas fa-circle"></i>
-            </div>
-            <div class="progress-timeline-content">
-                <div class="progress-timeline-title">Month ${i + 1}</div>
-                <div class="progress-timeline-subtitle" id="timeline-subtitle-${i}">Waiting...</div>
-            </div>
-            <div class="progress-timeline-time" id="timeline-time-${i}">--</div>
-        `;
-        timeline.appendChild(item);
-    }
-}
-
-function simulateProgress(totalMonths) {
-    // Estimate: ~5-10 seconds per month (varies based on data volume)
-    const estimatedSecondsPerMonth = 7;
-    const totalEstimatedTime = totalMonths * estimatedSecondsPerMonth * 1000;
-    const updateInterval = 500; // Update every 500ms
-    const totalUpdates = totalEstimatedTime / updateInterval;
-    let currentUpdate = 0;
-    
-    const progressSimulator = setInterval(() => {
-        currentUpdate++;
-        const progress = Math.min((currentUpdate / totalUpdates) * 100, 95); // Cap at 95% until real completion
-        const currentMonth = Math.floor((progress / 100) * totalMonths);
-        
-        updateProgress(progress, `Processing month ${currentMonth + 1} of ${totalMonths}...`, currentMonth);
-        
-        if (progress >= 95) {
-            clearInterval(progressSimulator);
-            updateProgress(95, 'Finalizing analysis...', totalMonths - 1);
-        }
-    }, updateInterval);
-    
-    // Store interval ID to clear it if needed
-    window.progressSimulator = progressSimulator;
-}
-
-function updateProgress(percentage, taskText, completedMonths) {
-    // Update progress bar
-    const progressBar = document.getElementById('progressBarFill');
-    const progressPercentage = document.getElementById('progressPercentage');
-    progressBar.style.width = percentage + '%';
-    progressPercentage.textContent = Math.round(percentage) + '%';
-    
-    // Update current task
-    document.getElementById('currentTaskText').textContent = taskText;
-    
-    // Update months completed
-    monthsCompleted = completedMonths;
-    document.getElementById('progressMonthsCompleted').textContent = completedMonths;
-    
-    // Update timeline
-    updateTimeline(completedMonths);
-    
-    // Calculate and update estimated time remaining
-    updateTimeEstimate(percentage);
-}
-
-function updateTimeline(completedMonths) {
-    for (let i = 0; i < monthsToProcess; i++) {
-        const icon = document.getElementById(`timeline-icon-${i}`);
-        const subtitle = document.getElementById(`timeline-subtitle-${i}`);
-        const time = document.getElementById(`timeline-time-${i}`);
-        
-        if (i < completedMonths) {
-            // Completed
-            icon.className = 'progress-timeline-icon completed';
-            icon.innerHTML = '<i class="fas fa-check"></i>';
-            subtitle.textContent = 'Completed';
-            if (time.textContent === '--') {
-                time.textContent = '✓';
-            }
-        } else if (i === completedMonths) {
-            // Active
-            icon.className = 'progress-timeline-icon active';
-            icon.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            subtitle.textContent = 'Processing...';
-            time.textContent = 'Now';
-        } else {
-            // Pending
-            icon.className = 'progress-timeline-icon pending';
-            icon.innerHTML = '<i class="fas fa-circle"></i>';
-            subtitle.textContent = 'Waiting...';
-            time.textContent = '--';
-        }
-    }
-}
-
-function startProgressTimer() {
-    progressInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - progressStartTime) / 1000);
-        document.getElementById('progressElapsedTime').textContent = formatTime(elapsed);
-    }, 1000);
-}
-
-function stopProgressTimer() {
-    if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-    }
-    if (window.progressSimulator) {
-        clearInterval(window.progressSimulator);
-    }
-}
-
-function updateTimeEstimate(percentage) {
-    if (percentage <= 0 || percentage >= 100) {
-        document.getElementById('progressEstimatedTime').textContent = '--';
-        return;
-    }
-    
-    const elapsed = (Date.now() - progressStartTime) / 1000; // seconds
-    const estimatedTotal = elapsed / (percentage / 100);
-    const remaining = Math.max(0, estimatedTotal - elapsed);
-    
-    document.getElementById('progressEstimatedTime').textContent = formatTime(Math.ceil(remaining));
-}
-
-function formatTime(seconds) {
-    if (seconds < 60) {
-        return seconds + 's';
-    } else if (seconds < 3600) {
-        const minutes = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return minutes + 'm ' + secs + 's';
-    } else {
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return hours + 'h ' + minutes + 'm';
+    } finally {
+        document.getElementById('loadingSpinner').style.display = 'none';
     }
 }
 
@@ -1145,10 +715,9 @@ function updateStatistics() {
     
     document.getElementById('totalNew').textContent = totalNew;
     document.getElementById('totalClosed').textContent = totalClosed;
+    document.getElementById('netChange').textContent = netChange > 0 ? `+${netChange}` : netChange;
     document.getElementById('currentVGI').textContent = currentVGI;
-    
-    // Note: netChange and avgVGIChange are still calculated for use in other functions
-    // like updateStatusIndicator() and tooltip display
+    document.getElementById('avgVGIChange').textContent = avgVGIChange > 0 ? `+${avgVGIChange}` : avgVGIChange;
 }
 
 function updateStatusIndicator() {

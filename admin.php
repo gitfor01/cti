@@ -71,13 +71,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'A user with that username already exists.';
                 $messageType = 'warning';
             } else {
-                if (addUser($pdo, $newUsername, $newPassword, $newRole)) {
+                $result = addUser($pdo, $newUsername, $newPassword, $newRole);
+                if ($result['success']) {
                     $message = 'User added successfully.';
                     $messageType = 'success';
                 } else {
-                    $message = 'Error adding user.';
+                    $message = 'Error adding user: ' . $result['error'];
                     $messageType = 'danger';
                 }
+            }
+        }
+    }
+    // Change user password (admin function)
+    elseif (isset($_POST['change_user_password'])) {
+        $targetUserId = isset($_POST['target_user_id']) ? (int)$_POST['target_user_id'] : 0;
+        $newPassword = isset($_POST['new_user_password']) ? $_POST['new_user_password'] : '';
+        $confirmPassword = isset($_POST['confirm_user_password']) ? $_POST['confirm_user_password'] : '';
+
+        if ($targetUserId <= 0) {
+            $message = 'Invalid user ID.';
+            $messageType = 'danger';
+        } elseif ($newPassword === '' || $confirmPassword === '') {
+            $message = 'Please enter and confirm the new password.';
+            $messageType = 'danger';
+        } elseif ($newPassword !== $confirmPassword) {
+            $message = 'Passwords do not match.';
+            $messageType = 'danger';
+        } else {
+            $result = adminChangeUserPassword($pdo, $targetUserId, $newPassword);
+            if ($result['success']) {
+                $message = 'User password changed successfully.';
+                $messageType = 'success';
+            } else {
+                $message = 'Error changing password: ' . $result['error'];
+                $messageType = 'danger';
             }
         }
     }
@@ -181,6 +208,9 @@ include 'includes/header.php';
                     <div class="mb-3">
                         <label for="new_password" class="form-label">Password</label>
                         <input type="password" class="form-control" id="new_password" name="new_password" required>
+                        <div class="form-text">
+                            <small>Password must be at least 7 characters and contain uppercase, lowercase, numbers, and symbols.</small>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="new_role" class="form-label">Role</label>
@@ -210,12 +240,15 @@ include 'includes/header.php';
                                     <td><?php echo htmlspecialchars($user['username']); ?></td>
                                     <td><?php echo htmlspecialchars(ucfirst($user['role'])); ?></td>
                                     <td>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#changePasswordModal<?php echo $user['id']; ?>">
+                                            <i class="fas fa-key"></i>
+                                        </button>
                                         <?php if ($user['id'] != $_SESSION['user_id']): ?>
                                             <a href="admin.php?delete_user_id=<?php echo $user['id']; ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this user?');">
                                                 <i class="fas fa-trash"></i>
                                             </a>
                                         <?php else: ?>
-                                            <span class="text-muted">—</span>
+                                            <span class="text-muted">(You)</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -650,5 +683,54 @@ include 'includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- Password Change Modals for Each User -->
+<?php foreach ($users as $user): ?>
+<div class="modal fade" id="changePasswordModal<?php echo $user['id']; ?>" tabindex="-1" aria-labelledby="changePasswordModalLabel<?php echo $user['id']; ?>" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="changePasswordModalLabel<?php echo $user['id']; ?>">
+                    <i class="fas fa-key"></i> Change Password for <?php echo htmlspecialchars($user['username']); ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="admin.php">
+                <div class="modal-body">
+                    <input type="hidden" name="change_user_password" value="1">
+                    <input type="hidden" name="target_user_id" value="<?php echo $user['id']; ?>">
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Password requirements:
+                        <ul class="mb-0 mt-2">
+                            <li>At least 7 characters long</li>
+                            <li>Contains uppercase letters (A-Z)</li>
+                            <li>Contains lowercase letters (a-z)</li>
+                            <li>Contains numbers (0-9)</li>
+                            <li>Contains symbols (!@#$%^&* etc.)</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="new_user_password_<?php echo $user['id']; ?>" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="new_user_password_<?php echo $user['id']; ?>" name="new_user_password" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirm_user_password_<?php echo $user['id']; ?>" class="form-label">Confirm New Password</label>
+                        <input type="password" class="form-control" id="confirm_user_password_<?php echo $user['id']; ?>" name="confirm_user_password" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Change Password
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endforeach; ?>
 
 <?php include 'includes/footer.php'; ?>

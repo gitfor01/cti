@@ -1,10 +1,10 @@
 <?php
 /**
- * VA Dashboard Demo - Sample Data Version
- * Demonstrates the VA Dashboard with sample vulnerability data
+ * VA Dashboard Demo - Bar Chart Version
+ * Demonstrates the VA Dashboard with bar chart visualization
  */
 
-$pageTitle = 'VA Dashboard Demo - Vulnerability Analysis';
+$pageTitle = 'VA Dashboard Demo - Bar Chart View';
 require_once 'includes/header.php';
 require_once 'includes/config.php';
 
@@ -727,15 +727,15 @@ $avgVGIChange = round($totalVGIChange / count($sampleData), 2);
 <div class="va-dashboard">
     <div class="dashboard-header">
         <h1 class="dashboard-title">
-            <i class="fas fa-chart-bar"></i> VA Dashboard Demo
+            <i class="fas fa-chart-bar"></i> VA Dashboard Demo - Bar Chart
         </h1>
-        <p class="dashboard-subtitle">Monthly Vulnerability Analysis with VGI Tracking</p>
+        <p class="dashboard-subtitle">Monthly Net Change in Vulnerabilities</p>
     </div>
     
     <div class="demo-notice">
-        <h4><i class="fas fa-info-circle"></i> Demo Mode</h4>
-        <p>This is a demonstration using sample vulnerability data. The interactive bar chart shows the net change in vulnerabilities for each month with detailed severity breakdowns.</p>
-        <a href="va_dashboard.php" class="btn-live">
+        <h4><i class="fas fa-info-circle"></i> Demo Mode - Bar Chart View</h4>
+        <p>This is a demonstration using sample vulnerability data. The bar chart shows the net change in vulnerabilities for each month.</p>
+        <a href="va_dashboard_barchart.php" class="btn-live">
             <i class="fas fa-plug"></i> Connect to Live Tenable SC
         </a>
     </div>

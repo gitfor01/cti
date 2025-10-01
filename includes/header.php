@@ -86,9 +86,9 @@ if (session_status() === PHP_SESSION_NONE) {
                 <ul class="navbar-nav ms-auto">
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <li class="nav-item">
-                            <span class="navbar-text text-light me-3">
+                            <a class="nav-link" href="profile.php">
                                 <i class="fas fa-user"></i> <?php echo htmlspecialchars($_SESSION['username']); ?>
-                            </span>
+                            </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="logout.php">
