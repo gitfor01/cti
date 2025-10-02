@@ -50,6 +50,18 @@ try {
     $api = new TenableSCAPI($input['scHost'], $input['accessKey'], $input['secretKey']);
     $monthsToAnalyze = (int)$input['monthsToAnalyze'];
     
+    // Log the initial request
+    $logFile = __DIR__ . '/logs.txt';
+    $timestamp = date('Y-m-d H:i:s');
+    $logMessage = "\n\n" . str_repeat('=', 80) . "\n";
+    $logMessage .= "[$timestamp] NEW VA DASHBOARD REQUEST\n";
+    $logMessage .= str_repeat('=', 80) . "\n";
+    $logMessage .= "User: " . ($_SESSION['username'] ?? $_SESSION['user_id']) . "\n";
+    $logMessage .= "SC Host: " . $input['scHost'] . "\n";
+    $logMessage .= "Months to Analyze: $monthsToAnalyze\n";
+    $logMessage .= str_repeat('=', 80) . "\n\n";
+    file_put_contents($logFile, $logMessage, FILE_APPEND);
+    
     $results = [];
     $previousVGI = 0;
     $methodsUsed = [];
@@ -101,16 +113,30 @@ try {
         ];
     }
     
+    // Log final results
+    $finalSummary = [
+        'totalNew' => array_sum(array_column($results, 'new')),
+        'totalClosed' => array_sum(array_column($results, 'closed')),
+        'totalNet' => array_sum(array_column($results, 'net')),
+        'currentVGI' => end($results)['vgi'],
+        'avgVGIChange' => round(array_sum(array_column($results, 'vgiChange')) / count($results), 2)
+    ];
+    
+    $logMessage = "\n" . str_repeat('=', 80) . "\n";
+    $logMessage .= "[" . date('Y-m-d H:i:s') . "] FINAL RESULTS\n";
+    $logMessage .= str_repeat('=', 80) . "\n";
+    $logMessage .= json_encode([
+        'months_processed' => count($results),
+        'summary' => $finalSummary,
+        'optimization_methods' => $methodsUsed
+    ], JSON_PRETTY_PRINT);
+    $logMessage .= "\n" . str_repeat('=', 80) . "\n\n";
+    file_put_contents($logFile, $logMessage, FILE_APPEND);
+    
     echo json_encode([
         'success' => true,
         'data' => $results,
-        'summary' => [
-            'totalNew' => array_sum(array_column($results, 'new')),
-            'totalClosed' => array_sum(array_column($results, 'closed')),
-            'totalNet' => array_sum(array_column($results, 'net')),
-            'currentVGI' => end($results)['vgi'],
-            'avgVGIChange' => round(array_sum(array_column($results, 'vgiChange')) / count($results), 2)
-        ],
+        'summary' => $finalSummary,
         'optimization' => [
             'methodsUsed' => $methodsUsed,
             'note' => 'Methods: sumid_count_field (fastest), bulk_export (recommended), individual_queries (slowest)'
@@ -118,6 +144,16 @@ try {
     ]);
     
 } catch (Exception $e) {
+    // Log the error
+    $logFile = __DIR__ . '/logs.txt';
+    $logMessage = "\n" . str_repeat('=', 80) . "\n";
+    $logMessage .= "[" . date('Y-m-d H:i:s') . "] ERROR OCCURRED\n";
+    $logMessage .= str_repeat('=', 80) . "\n";
+    $logMessage .= "Error Message: " . $e->getMessage() . "\n";
+    $logMessage .= "Stack Trace:\n" . $e->getTraceAsString() . "\n";
+    $logMessage .= str_repeat('=', 80) . "\n\n";
+    file_put_contents($logFile, $logMessage, FILE_APPEND);
+    
     http_response_code(500);
     echo json_encode([
         'success' => false,
@@ -176,6 +212,7 @@ class TenableSCAPI {
     private $host;
     private $accessKey;
     private $secretKey;
+    private $logFile;
     
     const SEVERITY_CRITICAL = '4';
     const SEVERITY_HIGH = '3';
@@ -196,6 +233,27 @@ class TenableSCAPI {
         $this->host = rtrim($host, '/');
         $this->accessKey = $accessKey;
         $this->secretKey = $secretKey;
+        $this->logFile = __DIR__ . '/logs.txt';
+    }
+    
+    /**
+     * Log messages to logs.txt file
+     */
+    private function log($message, $data = null) {
+        $timestamp = date('Y-m-d H:i:s');
+        $logMessage = "[$timestamp] $message";
+        
+        if ($data !== null) {
+            if (is_array($data) || is_object($data)) {
+                $logMessage .= "\n" . json_encode($data, JSON_PRETTY_PRINT);
+            } else {
+                $logMessage .= "\n" . $data;
+            }
+        }
+        
+        $logMessage .= "\n" . str_repeat('-', 80) . "\n";
+        
+        file_put_contents($this->logFile, $logMessage, FILE_APPEND);
     }
     
     /**
@@ -205,6 +263,15 @@ class TenableSCAPI {
      * @return array Complete month data with new, closed, current counts and VGI data
      */
     public function getMonthlyVulnerabilityData($startTime, $endTime) {
+        $monthName = date('M Y', $startTime);
+        
+        $this->log("========== PROCESSING MONTH: $monthName ==========", [
+            'start_time' => date('Y-m-d H:i:s', $startTime),
+            'end_time' => date('Y-m-d H:i:s', $endTime),
+            'start_timestamp' => $startTime,
+            'end_timestamp' => $endTime
+        ]);
+        
         $severities = [
             'critical' => self::SEVERITY_CRITICAL,
             'high' => self::SEVERITY_HIGH,
@@ -243,6 +310,14 @@ class TenableSCAPI {
             $monthData['current'][$sevName] = $assetData;
             $monthData['vgi_data'][$sevName . '_asset_instances'] = $assetData['asset_instances'];
         }
+        
+        $this->log("MONTH SUMMARY: $monthName", [
+            'total_new' => $monthData['totals']['new'],
+            'total_closed' => $monthData['totals']['closed'],
+            'new_by_severity' => $monthData['new'],
+            'closed_by_severity' => $monthData['closed'],
+            'current_asset_instances' => $monthData['vgi_data']
+        ]);
         
         return $monthData;
     }
@@ -372,6 +447,13 @@ class TenableSCAPI {
     private function makeRequest($endpoint, $method = 'GET', $data = null) {
         $url = $this->host . '/rest' . $endpoint;
         
+        // Log the request
+        $this->log("API REQUEST - $method $endpoint", [
+            'url' => $url,
+            'method' => $method,
+            'request_data' => $data
+        ]);
+        
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -398,17 +480,38 @@ class TenableSCAPI {
         if (curl_errno($ch)) {
             $error = curl_error($ch);
             curl_close($ch);
+            $this->log("API REQUEST FAILED - cURL Error", [
+                'endpoint' => $endpoint,
+                'error' => $error
+            ]);
             throw new Exception('Connection error: ' . $error);
         }
         
         curl_close($ch);
         
+        // Log the response
+        $this->log("API RESPONSE - HTTP $httpCode", [
+            'endpoint' => $endpoint,
+            'http_code' => $httpCode,
+            'response' => $response ? json_decode($response, true) : 'Empty response'
+        ]);
+        
         if ($httpCode !== 200) {
+            $this->log("API REQUEST FAILED - Non-200 Status", [
+                'endpoint' => $endpoint,
+                'http_code' => $httpCode,
+                'response' => substr($response, 0, 500)
+            ]);
             throw new Exception("API request failed with status code: $httpCode. Response: " . substr($response, 0, 200));
         }
         
         $decoded = json_decode($response, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->log("API REQUEST FAILED - Invalid JSON", [
+                'endpoint' => $endpoint,
+                'json_error' => json_last_error_msg(),
+                'response_preview' => substr($response, 0, 500)
+            ]);
             throw new Exception('Invalid JSON response from API');
         }
         
@@ -419,6 +522,15 @@ class TenableSCAPI {
      * Get new vulnerabilities by severity for a specific time range
      */
     public function getNewVulnerabilitiesBySeverity($startTime, $endTime, $severity) {
+        $severityNames = ['0' => 'Info', '1' => 'Low', '2' => 'Medium', '3' => 'High', '4' => 'Critical'];
+        $severityName = $severityNames[$severity] ?? $severity;
+        
+        $this->log("Getting NEW vulnerabilities", [
+            'severity' => "$severityName ($severity)",
+            'time_range' => date('Y-m-d H:i:s', $startTime) . ' to ' . date('Y-m-d H:i:s', $endTime),
+            'timestamps' => "$startTime:$endTime"
+        ]);
+        
         $queryFilters = [
             [
                 'filterName' => 'firstSeen',
@@ -446,17 +558,32 @@ class TenableSCAPI {
         
         $response = $this->makeRequest('/analysis', 'POST', $requestData);
         
+        $count = 0;
         if (isset($response['response']['totalRecords'])) {
-            return (int)$response['response']['totalRecords'];
+            $count = (int)$response['response']['totalRecords'];
         }
         
-        return 0;
+        $this->log("NEW vulnerabilities result", [
+            'severity' => "$severityName ($severity)",
+            'count' => $count
+        ]);
+        
+        return $count;
     }
     
     /**
      * Get closed vulnerabilities by severity for a specific time range
      */
     public function getClosedVulnerabilitiesBySeverity($startTime, $endTime, $severity) {
+        $severityNames = ['0' => 'Info', '1' => 'Low', '2' => 'Medium', '3' => 'High', '4' => 'Critical'];
+        $severityName = $severityNames[$severity] ?? $severity;
+        
+        $this->log("Getting CLOSED vulnerabilities", [
+            'severity' => "$severityName ($severity)",
+            'time_range' => date('Y-m-d H:i:s', $startTime) . ' to ' . date('Y-m-d H:i:s', $endTime),
+            'timestamps' => "$startTime:$endTime"
+        ]);
+        
         $queryFilters = [
             [
                 'filterName' => 'lastMitigated',
@@ -484,11 +611,17 @@ class TenableSCAPI {
         
         $response = $this->makeRequest('/analysis', 'POST', $requestData);
         
+        $count = 0;
         if (isset($response['response']['totalRecords'])) {
-            return (int)$response['response']['totalRecords'];
+            $count = (int)$response['response']['totalRecords'];
         }
         
-        return 0;
+        $this->log("CLOSED vulnerabilities result", [
+            'severity' => "$severityName ($severity)",
+            'count' => $count
+        ]);
+        
+        return $count;
     }
     
     /**
