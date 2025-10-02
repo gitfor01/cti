@@ -149,7 +149,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'lastMitigated',
                 'operator' => '=',
-                'value' => $startTime . '-' . $endTime
+                'value' => $startTime . ':' . $endTime
             ]
         ];
         
