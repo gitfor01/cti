@@ -461,7 +461,7 @@ class TenableSCAPI {
             [
                 'filterName' => 'lastMitigated',
                 'operator' => '=',
-                'value' => $endTime . ':' . $startTime
+                'value' => $startTime . ':' . $endTime
             ],
             [
                 'filterName' => 'severity',
